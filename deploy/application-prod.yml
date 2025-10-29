@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: minilpa-web-backend
+  profiles:
+    active: prod
+  
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# 生产环境日志配置
+logging:
+  level:
+    root: INFO
+    moe.sekiu.minilpa: INFO
+    org.springframework.web: WARN
+  file:
+    name: /www/wwwroot/minilpa/logs/backend.log
+    max-size: 10MB
+    max-history: 30
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# 管理端点（生产环境可以关闭或限制访问）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
