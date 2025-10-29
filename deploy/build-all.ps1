@@ -117,15 +117,58 @@ if (Test-Path (Join-Path $PSScriptRoot "update.sh")) {
 
 # Copy LPAC files (if available)
 Write-Host ""
-Write-Host "5. Checking LPAC files..." -ForegroundColor Cyan
+Write-Host "5. Processing LPAC files..." -ForegroundColor Cyan
 $lpacDir = Join-Path $DistDir "lpac"
 New-Item -ItemType Directory -Force -Path $lpacDir | Out-Null
 
-# Check for Linux LPAC in build directory
-$linuxLpacInBuild = Join-Path $ProjectRoot "MiniLPA-main\build\lpac\linux_x86.zip"
-if (Test-Path $linuxLpacInBuild) {
-    Write-Host "   Found Linux LPAC in build directory" -ForegroundColor Green
-    Write-Host "   Note: Extract and copy to lpac/linux-x86_64/ manually" -ForegroundColor Yellow
+# Try to extract LPAC from MiniLPA-Linux-x86_64 package
+$linuxPackageJar = Join-Path $ProjectRoot "MiniLPA-Linux-x86_64\lib\app\MiniLPA-all.jar"
+$extractedLpac = Join-Path $ProjectRoot "MiniLPA-Linux-x86_64\lib\app\lpac_extracted\lpac"
+$localLpacDir = Join-Path $PSScriptRoot "lpac"
+
+# Check if we have extracted LPAC locally
+if (Test-Path $localLpacDir) {
+    $linuxLpac = Join-Path $localLpacDir "linux-x86_64\lpac"
+    if (Test-Path $linuxLpac) {
+        $destLpacDir = Join-Path $lpacDir "linux-x86_64"
+        New-Item -ItemType Directory -Force -Path $destLpacDir | Out-Null
+        Copy-Item $linuxLpac (Join-Path $destLpacDir "lpac") -Force
+        $size = (Get-Item $linuxLpac).Length / 1KB
+        Write-Host "   Copied LPAC from local extract: $([math]::Round($size, 2)) KB" -ForegroundColor Green
+    }
+}
+
+# Try extracting from MiniLPA-Linux-x86_64 JAR if available
+if (-not (Test-Path (Join-Path $lpacDir "linux-x86_64\lpac")) -and (Test-Path $linuxPackageJar) -and $env:JAVA_HOME) {
+    Write-Host "   Attempting to extract LPAC from MiniLPA-Linux-x86_64 JAR..." -ForegroundColor Yellow
+    $jarDir = Split-Path -Parent $linuxPackageJar
+    Push-Location $jarDir
+    try {
+        # Extract linux_x86.zip
+        & "$env:JAVA_HOME\bin\jar.exe" -xf MiniLPA-all.jar linux_x86.zip -ErrorAction SilentlyContinue
+        if (Test-Path "linux_x86.zip") {
+            # Extract zip
+            $tempDir = Join-Path $jarDir "lpac_temp"
+            New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+            Expand-Archive -Path "linux_x86.zip" -DestinationPath $tempDir -Force -ErrorAction SilentlyContinue
+            
+            # Find and copy lpac
+            $lpacFile = Get-ChildItem $tempDir -Recurse -Filter "lpac" | Where-Object { -not $_.PSIsContainer } | Select-Object -First 1
+            if ($lpacFile) {
+                $destLpacDir = Join-Path $lpacDir "linux-x86_64"
+                New-Item -ItemType Directory -Force -Path $destLpacDir | Out-Null
+                Copy-Item $lpacFile.FullName (Join-Path $destLpacDir "lpac") -Force
+                $size = $lpacFile.Length / 1KB
+                Write-Host "   Extracted and copied LPAC: $([math]::Round($size, 2)) KB" -ForegroundColor Green
+            }
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item "linux_x86.zip" -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Host "   Could not extract from JAR: $_" -ForegroundColor Yellow
+    } finally {
+        Pop-Location
+    }
 }
 
 # Check for Windows LPAC (for reference)
@@ -134,31 +177,33 @@ if (Test-Path $winLpac) {
     Write-Host "   Found Windows LPAC (Windows only)" -ForegroundColor Gray
 }
 
+# Check if LPAC was copied
+$finalLpac = Join-Path $lpacDir "linux-x86_64\lpac"
+if (Test-Path $finalLpac) {
+    Write-Host "   ✅ Linux LPAC included in deployment package" -ForegroundColor Green
+} else {
+    Write-Host "   ⚠️  Linux LPAC not found, will need manual configuration" -ForegroundColor Yellow
+}
+
 # Create a README for LPAC setup
 $lpacReadme = @"
 # LPAC可执行文件配置说明
 
-LPAC文件需要在部署服务器上手动配置。
+LPAC文件已包含在部署包中（如果找到的话）。
 
 ## 文件位置
 
-将LPAC可执行文件放在：
-/www/wwwroot/minilpa/lpac/linux-x86_64/lpac
+LPAC文件应该在：
+/www/wwwroot/minilpa/linux-x86_64/lpac
 
-或根据你的服务器架构选择对应目录：
-- linux-x86_64/
-- linux-x86/
-- windows-x86_64/  (如需要)
+（注意：local-agent的工作目录是 /www/wwwroot/minilpa）
 
-## 获取LPAC文件
+## 如果没有自动包含
 
 1. 从MiniLPA Releases下载: https://github.com/EsimMoe/MiniLPA/releases/latest
-2. 或从MiniLPA-main项目的build/lpac目录提取
-3. 或手动编译: https://github.com/estkme/lpac
-
-## 设置权限
-
-chmod +x /www/wwwroot/minilpa/lpac/linux-x86_64/lpac
+2. 从MiniLPA-Linux-x86_64包中提取（使用 deploy/extract-lpac.ps1）
+3. 从MiniLPA-main项目的build/lpac目录提取
+4. 或手动编译: https://github.com/estkme/lpac
 
 详细说明请参考: LPAC_SETUP.md
 "@

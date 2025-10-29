@@ -9,15 +9,32 @@
 - **大小**: 约0.59 MB
 - **用途**: Windows开发/测试环境
 
-#### Linux版本（需要获取）
-Linux版本的LPAC文件需要单独获取，有以下几种方式：
+#### Linux版本获取方式
 
-1. **从MiniLPA Releases下载**
+如果你有 `MiniLPA-Linux-x86_64` 目录（MiniLPA的Linux发布包），可以使用以下方式：
+
+**方式1: 从MiniLPA-Linux-x86_64包中提取（推荐）** ⭐
+
+LPAC被打包在JAR文件的资源中，可以提取：
+
+```powershell
+# 在deploy目录运行
+cd deploy
+.\extract-lpac.ps1
+```
+
+这个脚本会：
+1. 从 `MiniLPA-Linux-x86_64/lib/app/MiniLPA-all.jar` 中提取 `linux_x86.zip`
+2. 解压zip文件找到 `lpac` 可执行文件
+3. 复制到 `deploy/lpac/linux-x86_64/lpac`
+4. 构建脚本会自动包含此文件到部署包中
+
+**方式2: 从MiniLPA Releases下载**
    - 访问: https://github.com/EsimMoe/MiniLPA/releases/latest
    - 下载对应平台的LPAC压缩包
    - 通常包含在完整发布包中
 
-2. **从构建产物获取**
+**方式3: 从构建产物获取**
    ```powershell
    # 在MiniLPA-main项目目录
    cd MiniLPA-main
@@ -25,7 +42,7 @@ Linux版本的LPAC文件需要单独获取，有以下几种方式：
    # LPAC文件会被下载到 build/lpac/ 目录
    ```
 
-3. **手动编译**
+**方式4: 手动编译**
    - LPAC项目: https://github.com/estkme/lpac
    - 需要编译对应平台的可执行文件
 
@@ -164,11 +181,13 @@ sudo journalctl -u minilpa-agent -n 50 | grep -i lpac
 - ✅ LPAC文件存在于: `MiniLPA-main/windows_x86/lpac.exe`
 
 ### Linux部署环境
-- ⚠️ 需要手动准备Linux版本的LPAC文件
+- ✅ **如果你有 `MiniLPA-Linux-x86_64` 目录**，可以运行 `deploy/extract-lpac.ps1` 自动提取
+- ⚠️ 否则需要手动准备Linux版本的LPAC文件
 - 📦 可以：
-  1. 从MiniLPA Releases下载
-  2. 或从构建产物中提取
-  3. 或手动编译
+  1. **从MiniLPA-Linux-x86_64包中提取**（推荐，如果可用）
+  2. 从MiniLPA Releases下载
+  3. 或从构建产物中提取
+  4. 或手动编译
 
 ### 部署包
 - ⚠️ 当前构建脚本**不会自动包含**LPAC文件（因为跨平台原因）
