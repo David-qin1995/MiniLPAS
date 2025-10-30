@@ -82,7 +82,11 @@ jobs:
           echo "gradle-wrapper.jar 不存在，从 web-backend 复制..."
           mkdir -p ./gradle/wrapper
           # 查找 web-backend 目录中的 gradle-wrapper.jar
-          BACKEND_WRAPPER=$(find "$(pwd)/../.." -path "*/web-backend/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null | head -1)
+          BACKEND_WRAPPER=$(find . -path "*/web-backend/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null | head -1)
+          if [ -z "$BACKEND_WRAPPER" ]; then
+            # 如果当前目录找不到，尝试在上级目录查找
+            BACKEND_WRAPPER=$(find .. -path "*/web-backend/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null | head -1)
+          fi
           if [ -n "$BACKEND_WRAPPER" ] && [ -f "$BACKEND_WRAPPER" ]; then
             cp "$BACKEND_WRAPPER" ./gradle/wrapper/gradle-wrapper.jar
             echo "已从 web-backend 复制 gradle-wrapper.jar"
