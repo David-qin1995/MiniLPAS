@@ -172,7 +172,8 @@ jobs:
         # 创建部署脚本
         cat > deploy-package/deploy.sh << 'DEPLOYSCRIPT'
         #!/bin/bash
-        set -e
+        # 不使用 set -e，避免因为权限警告导致脚本退出
+        set -u
         
         INSTALL_DIR="/www/wwwroot/minilpa"
         BACKUP_DIR="$INSTALL_DIR/backup/$(date +%Y%m%d_%H%M%S)"
@@ -257,8 +258,12 @@ jobs:
         
         # 4. 设置权限
         echo "4. 设置权限..."
-        chown -R www:www "$INSTALL_DIR" 2>/dev/null || chown -R $USER:$USER "$INSTALL_DIR"
+        # 设置目录和文件权限，忽略无法修改的特殊文件（如宝塔的 .user.ini）
+        find "$INSTALL_DIR" -type f ! -name ".user.ini" -exec chown www:www {} \; 2>/dev/null || find "$INSTALL_DIR" -type f ! -name ".user.ini" -exec chown $USER:$USER {} \; 2>/dev/null || true
+        find "$INSTALL_DIR" -type d -exec chown www:www {} \; 2>/dev/null || find "$INSTALL_DIR" -type d -exec chown $USER:$USER {} \; 2>/dev/null || true
         chmod 644 "$INSTALL_DIR/app"/*.jar 2>/dev/null || true
+        # 忽略 .user.ini 等特殊文件的权限错误
+        echo "   ⚠️  部分文件权限设置可能失败（如 .user.ini），这是正常的"
         
         # 5. 重启服务（确保使用新文件）
         echo "5. 重启服务..."
