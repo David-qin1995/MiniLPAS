@@ -75,6 +75,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' }}
     steps:
       - name: Prepare refs
         id: refs
@@ -117,4 +118,8 @@ jobs:
             mv "$DEPLOY_DIR/docker-compose.rendered.yml" "$DEPLOY_DIR/docker-compose.yml"
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d
+      - name: Skip deploy (missing SSH secrets)
+        if: ${{ !(secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' ) }}
+        run: |
+          echo "SSH_HOST/SSH_USER/SSH_KEY secrets not configured. Skipping deploy step."
 

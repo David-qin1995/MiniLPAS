@@ -57,7 +57,7 @@ jobs:
   deploy:
     name: Deploy to Baota Server (SSH)
     needs: build-and-push
-    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' && secrets.MINILPA_SERVER_WS_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Prepare image ref
@@ -95,4 +95,8 @@ jobs:
             mv "$DEPLOY_DIR/docker-compose.rendered.yml" "$DEPLOY_DIR/docker-compose.yml"
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d
+      - name: Skip deploy (missing SSH/WS secrets)
+        if: ${{ !((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' && secrets.MINILPA_SERVER_WS_URL != '' ) }}
+        run: |
+          echo "SSH_HOST/SSH_USER/SSH_KEY/MINILPA_SERVER_WS_URL not configured. Skipping deploy step."
 
