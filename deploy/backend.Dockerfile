@@ -1,12 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build stage ----------
-FROM eclipse-temurin:21-jdk AS build
-WORKDIR /build
-COPY web-backend /build/web-backend
+FROM gradle:8.7-jdk21 AS build
 WORKDIR /build/web-backend
-RUN ./gradlew.bat --version >/dev/null 2>&1 || true
-RUN ./gradlew clean build bootJar -x test --no-daemon
+COPY web-backend /build/web-backend
+RUN gradle clean build bootJar -x test --no-daemon
 
 # ---------- Runtime stage ----------
 FROM eclipse-temurin:21-jre

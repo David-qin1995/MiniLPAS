@@ -1,12 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build stage ----------
-FROM eclipse-temurin:21-jdk AS build
-WORKDIR /build
-COPY local-agent /build/local-agent
+FROM gradle:8.7-jdk21 AS build
 WORKDIR /build/local-agent
-RUN ./gradlew.bat --version >/dev/null 2>&1 || true
-RUN ./gradlew clean build -x test --no-daemon
+COPY local-agent /build/local-agent
+RUN gradle clean build -x test --no-daemon
 
 # ---------- Runtime stage ----------
 FROM debian:12-slim
@@ -22,13 +20,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 复制 agent 可运行 JAR
-COPY --from=build /build/local-agent/build/libs/*-all.jar /app/agent.jar 2>/dev/null || \
-    cp /build/local-agent/build/libs/*.jar /app/agent.jar
-
-# 复制 LPAC 可执行文件（Linux x86_64）
-COPY deploy/lpac/linux-x86_64/lpac /app/lpac/lpac
-RUN chmod +x /app/lpac/lpac
+# 复制 agent 可运行 JAR（优先 fat-jar）
+RUN set -eux; \
+    ls -l /build/local-agent/build/libs/; \
+    FAT=$(ls /build/local-agent/build/libs/*-all.jar 2>/dev/null || true); \
+    if [ -n "$FAT" ]; then cp "$FAT" /app/agent.jar; else cp /build/local-agent/build/libs/*.jar /app/agent.jar; fi
 
 # 启动脚本：先启动 pcscd，再启动 agent
 COPY deploy/entrypoint-agent.sh /entrypoint.sh
@@ -37,6 +33,6 @@ RUN chmod +x /entrypoint.sh
 # 环境变量：后端 WS 地址
 ENV MINILPA_SERVER_WS_URL=ws://host.docker.internal:8080/ws/agent
 
-# 需要访问 USB 设备时，请在运行时添加 --device=/dev/bus/usb -v /dev/bus/usb:/dev/bus/usb
+# 如需访问 USB 智能卡读卡器：运行时添加 --device=/dev/bus/usb 或 privileged: true
 ENTRYPOINT ["/entrypoint.sh"]
 
