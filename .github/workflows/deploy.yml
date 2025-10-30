@@ -18,6 +18,22 @@ jobs:
     steps:
     - name: 检出代码
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: 检查目录结构
+      run: |
+        echo "=== 当前目录结构 ==="
+        ls -la
+        echo ""
+        echo "=== 查找 web-backend ==="
+        find . -name "web-backend" -type d 2>/dev/null || true
+        echo ""
+        echo "=== 查找 local-agent ==="
+        find . -name "local-agent" -type d 2>/dev/null || true
+        echo ""
+        echo "=== 查找 web-frontend ==="
+        find . -name "web-frontend" -type d 2>/dev/null || true
     
     - name: 设置 Java 21
       uses: actions/setup-java@v4
@@ -31,8 +47,15 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
     
     - name: 构建后端服务
-      working-directory: ./MiniLPAS/web-backend
       run: |
+        # 查找 web-backend 目录
+        BACKEND_DIR=$(find . -type d -name "web-backend" | grep -v node_modules | head -1)
+        if [ -z "$BACKEND_DIR" ]; then
+          echo "错误: 找不到 web-backend 目录"
+          exit 1
+        fi
+        echo "找到后端目录: $BACKEND_DIR"
+        cd "$BACKEND_DIR"
         # 如果存在 gradlew，使用它；否则使用 java 直接运行 wrapper jar
         if [ -f "./gradlew" ]; then
           chmod +x ./gradlew
@@ -43,8 +66,15 @@ jobs:
         fi
     
     - name: 构建本地代理
-      working-directory: ./MiniLPAS/local-agent
       run: |
+        # 查找 local-agent 目录
+        AGENT_DIR=$(find . -type d -name "local-agent" | grep -v node_modules | head -1)
+        if [ -z "$AGENT_DIR" ]; then
+          echo "错误: 找不到 local-agent 目录"
+          exit 1
+        fi
+        echo "找到代理目录: $AGENT_DIR"
+        cd "$AGENT_DIR"
         if [ -f "./gradlew" ]; then
           chmod +x ./gradlew
           ./gradlew clean build --no-daemon
@@ -53,8 +83,15 @@ jobs:
         fi
     
     - name: 构建前端
-      working-directory: ./MiniLPAS/web-frontend
       run: |
+        # 查找 web-frontend 目录
+        FRONTEND_DIR=$(find . -type d -name "web-frontend" | grep -v node_modules | head -1)
+        if [ -z "$FRONTEND_DIR" ]; then
+          echo "错误: 找不到 web-frontend 目录"
+          exit 1
+        fi
+        echo "找到前端目录: $FRONTEND_DIR"
+        cd "$FRONTEND_DIR"
         npm ci
         npm run build
     
@@ -64,37 +101,45 @@ jobs:
         mkdir -p deploy-package/frontend
         mkdir -p deploy-package/config
         
-        # 复制后端JAR（过滤掉 plain jar）
-        cd MiniLPAS/web-backend/build/libs
-        for jar in *.jar; do
-          if [[ ! "$jar" == *"-plain.jar" ]]; then
-            cp "$jar" ../../../../deploy-package/app/minilpa-backend.jar
-            echo "后端JAR: $jar"
-            break
-          fi
-        done
-        cd ../../../../..
+        # 查找并复制后端JAR（过滤掉 plain jar）
+        BACKEND_DIR=$(find . -type d指定的路径 -name "web-backend" | grep -v node_modules | head -1)
+        BACKEND_JAR=$(find "$BACKEND_DIR/build/libs" -name "*.jar" ! -name "*-plain.jar" | head -1)
+        if [ -n "$BACKEND_JAR" ]; then
+          cp "$BACKEND_JAR" deploy-package/app/minilpa-backend.jar
+          echo "后端JAR已复制: $BACKEND_JAR"
+        else
+          echo "警告: 未找到后端JAR文件"
+        fi
         
-        # 复制代理JAR（过滤掉 plain jar）
-        cd MiniLPAS/local-agent/build/libs
-        for jar in *.jar; do
-          if [[ ! "$jar" == *"-plain.jar" ]]; then
-            cp "$jar" ../../../../deploy-package/app/minilpa-agent.jar
-            echo "代理JAR: $jar"
-            break
-          fi
-        done
-        cd ../../../../..
+        # 查找并复制代理JAR（过滤掉 plain jar）
+        AGENT_DIR=$(find . -type d -name "local-agent" | grep -v node_modules | head -1)
+        AGENT_JAR=$(find "$AGENT_DIR/build/libs" -name "*.jar" ! -name "*-plain.jar" | head -1)
+        if [ -n "$AGENT_JAR" ]; then
+          cp "$AGENT_JAR" deploy-package/app/minilpa-agent.jar
+          echo "代理JAR已复制: $AGENT_JAR"
+        else
+          echo "警告: 未找到代理JAR文件"
+        fi
         
-        # 复制前端文件
-        cp -r MiniLPAS/web-frontend/dist/* deploy-package/frontend/
+        # 查找并复制前端文件
+        FRONTEND_DIR=$(find . -type d -name "web-frontend" | grep -v node_modules | head -1)
+        if [ -d "$FRONTEND_DIR/dist" ]; then
+          cp -r "$FRONTEND_DIR/dist"/* deploy-package/frontend/
+          echo "前端文件已复制"
+        else
+          echo "警告: 未找到前端dist目录"
+        fi
         
-        # 复制配置文件
-        cp MiniLPAS/deploy/minilpa-backend.service deploy-package/config/
-        cp MiniLPAS/deploy/minilpa-agent.service deploy-package/config/
-        cp MiniLPAS/deploy/nginx.conf.example deploy-package/config/
-        cp MiniLPAS/deploy/update.sh deploy-package/config/
-        cp MiniLPAS/deploy/application-prod.yml deploy-package/config/application.yml
+        # 查找并复制配置文件
+        DEPLOY_DIR=$(find . -type d -name "deploy" | grep -v node_modules | head -1)
+        if [ -d "$DEPLOY_DIR" ]; then
+          cp "$DEPLOY_DIR/minilpa-backend.service" deploy-package/config/ 2>/dev/null || true
+          cp "$DEPLOY_DIR/minilpa-agent.service" deploy-package/config/ 2>/dev/null || true
+          cp "$DEPLOY_DIR/nginx.conf.example" deploy-package/config/ 2>/dev/null || true
+          cp "$DEPLOY_DIR/update.sh" deploy-package/config/ 2>/dev/null || true
+          cp "$DEPLOY_DIR/application-prod.yml" deploy-package/config/application.yml 2>/dev/null || true
+          echo "配置文件已复制"
+        fi
         
         # 创建部署脚本
         cat > deploy-package/deploy.sh << 'DEPLOYSCRIPT'
