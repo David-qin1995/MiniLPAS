@@ -300,7 +300,7 @@ jobs:
     
     - name: 部署到宝塔服务器
       uses: appleboy/scp-action@v0.1.7
-      config:
+      with:
         host: ${{ secrets.BAOTA_HOST }}
         username: ${{ secrets.BAOTA_USER }}
         key: ${{ secrets.BAOTA_SSH_KEY }}
@@ -308,7 +308,25 @@ jobs:
         source: "deploy-package.tar.gz"
         target: "/tmp"
         strip_components: 0
-      continue-on-error: false
+    
+    - name: 验证文件上传
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.BAOTA_HOST }}
+        username: ${{ secrets.BAOTA_USER }}
+        key: ${{ secrets.BAOTA_SSH_KEY }}
+        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        script: |
+          echo "=== 验证部署包是否上传成功 ==="
+          if [ -f "/tmp/deploy-package.tar.gz" ]; then
+            echo "✅ 部署包已成功上传"
+            ls -lh /tmp/deploy-package.tar.gz
+          else
+            echo "❌ 错误: 部署包未找到！"
+            echo "检查 /tmp 目录:"
+            ls -la /tmp/ | grep deploy || echo "未找到 deploy 相关文件"
+            exit 1
+          fi
     
     - name: 解压并执行部署脚本
       uses: appleboy/ssh-action@v1.0.3
