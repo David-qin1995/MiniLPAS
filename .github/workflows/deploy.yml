@@ -1,0 +1,238 @@
+name: CI/CD - Deploy to Baota
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '18'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+    
+    - name: 设置 Java 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: ${{ env.JAVA_VERSION }}
+    
+    - name: 设置 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: web-frontend/package-lock.json
+    
+    - name: 构建后端服务
+      working-directory: ./web-backend
+      run: |
+        # 如果存在 gradlew，使用它；否则使用 java 直接运行 wrapper jar
+        if [ -f "./gradlew" ]; then
+          chmod +x ./gradlew
+          ./gradlew clean bootJar --no-daemon
+        else
+          # 使用 java 直接运行 Gradle wrapper
+          java -jar gradle/wrapper/gradle-wrapper.jar clean bootJar --no-daemon
+        fi
+    
+    - name: 构建本地代理
+      working-directory: ./local-agent
+      run: |
+        if [ -f "./gradlew" ]; then
+          chmod +x ./gradlew
+          ./gradlew clean build --no-daemon
+        else
+          java -jar gradle/wrapper/gradle-wrapper.jar clean build --no-daemon
+        fi
+    
+    - name: 构建前端
+      working-directory: ./web-frontend
+      run: |
+        npm ci
+        npm run build
+    
+    - name: 准备部署文件
+      run: |
+        mkdir -p deploy-package/app
+        mkdir -p deploy-package/frontend
+        mkdir -p deploy-package/config
+        
+        # 复制后端JAR（过滤掉 plain jar）
+        cd web-backend/build/libs
+        for jar in *.jar; do
+          if [[ ! "$jar" == *"-plain.jar" ]]; then
+            cp "$jar" ../../../deploy-package/app/minilpa-backend.jar
+            echo "后端JAR: $jar"
+            break
+          fi
+        done
+        cd ../../..
+        
+        # 复制代理JAR（过滤掉 plain jar）
+        cd local-agent/build/libs
+        for jar in *.jar; do
+          if [[ ! "$jar" == *"-plain.jar" ]]; then
+            cp "$jar" ../../../deploy-package/app/minilpa-agent.jar
+            echo "代理JAR: $jar"
+            break
+          fi
+        done
+        cd ../../..
+        
+        # 复制前端文件
+        cp -r web-frontend/dist/* deploy-package/frontend/
+        
+        # 复制配置文件
+        cp deploy/minilpa-backend.service deploy-package/config/
+        cp deploy/minilpa-agent.service deploy-package/config/
+        cp deploy/nginx.conf.example deploy-package/config/
+        cp deploy/update.sh deploy-package/config/
+        cp deploy/application-prod.yml deploy-package/config/application.yml
+        
+        # 创建部署脚本
+        cat > deploy-package/deploy.sh << 'DEPLOYSCRIPT'
+        #!/bin/bash
+        set -e
+        
+        INSTALL_DIR="/www/wwwroot/minilpa"
+        BACKUP_DIR="$INSTALL_DIR/backup/$(date +%Y%m%d_%H%M%S)"
+        
+        echo "=== MiniLPA 自动部署脚本 ==="
+        
+        # 检查是否为root用户
+        if [ "$EUID" -ne 0 ]; then 
+          echo "请使用 sudo 运行此脚本"
+          exit 1
+        fi
+        
+        # 1. 停止服务
+        echo "1. 停止服务..."
+        systemctl stop minilpa-backend 2>/dev/null || true
+        systemctl stop minilpa-agent 2>/dev/null || true
+        sleep 2
+        
+        # 2. 备份旧文件
+        echo "2. 备份旧文件..."
+        mkdir -p "$BACKUP_DIR"
+        if [ -f "$INSTALL_DIR/app/minilpa-backend.jar" ]; then
+          cp "$INSTALL_DIR/app/minilpa-backend.jar" "$BACKUP_DIR/" 2>/dev/null || true
+        fi
+        if [ -f "$INSTALL_DIR/app/minilpa-agent.jar" ]; then
+          cp "$INSTALL_DIR/app/minilpa-agent.jar" "$BACKUP_DIR/" 2>/dev/null || true
+        fi
+        
+        # 3. 复制新文件
+        echo "3. 复制新文件..."
+        mkdir -p "$INSTALL_DIR/app" "$INSTALL_DIR/frontend" "$INSTALL_DIR/config" "$INSTALL_DIR/logs"
+        
+        # 复制JAR文件
+        if [ -f "app/minilpa-backend.jar" ]; then
+          cp app/minilpa-backend.jar "$INSTALL_DIR/app/" -f
+          echo "   ✅ 后端JAR已更新"
+        fi
+        if [ -f "app/minilpa-agent.jar" ]; then
+          cp app/minilpa-agent.jar "$INSTALL_DIR/app/" -f
+          echo "   ✅ 代理JAR已更新"
+        fi
+        
+        # 复制前端文件
+        if [ -d "frontend" ]; then
+          if [ -d "$INSTALL_DIR/frontend" ]; then
+            mv "$INSTALL_DIR/frontend" "$BACKUP_DIR/frontend" 2>/dev/null || true
+          fi
+          cp -r frontend "$INSTALL_DIR/"
+          echo "   ✅ 前端文件已更新"
+        fi
+        
+        # 复制配置文件（可选，不覆盖现有配置）
+        if [ -d "config" ]; then
+          cp -r config/* "$INSTALL_DIR/config/" 2>/dev/null || true
+        fi
+        
+        # 4. 设置权限
+        echo "4. 设置权限..."
+        chown -R www:www "$INSTALL_DIR" 2>/dev/null || chown -R $USER:$USER "$INSTALL_DIR"
+        chmod 644 "$INSTALL_DIR/app"/*.jar 2>/dev/null || true
+        
+        # 5. 启动服务
+        echo "5. 启动服务..."
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable minilpa-backend 2>/dev/null || true
+        systemctl enable minilpa-agent 2>/dev/null || true
+        systemctl start minilpa-backend
+        systemctl start minilpa-agent
+        
+        sleep 3
+        
+        # 检查服务状态
+        if systemctl is-active --quiet minilpa-backend; then
+          echo "   ✅ 后端服务启动成功"
+        else
+          echo "   ⚠️  后端服务启动失败"
+          echo "   查看日志: sudo journalctl -u minilpa-backend -n 50"
+        fi
+        
+        if systemctl is-active --quiet minilpa-agent; then
+          echo "   ✅ 代理服务启动成功"
+        else
+          echo "   ⚠️  代理服务启动失败"
+          echo "   查看日志: sudo journalctl -u minilpa-agent -n 50"
+        fi
+        
+        echo ""
+        echo "=== 部署完成 ==="
+        echo "备份位置: $BACKUP_DIR"
+        DEPLOYSCRIPT
+        chmod +x deploy-package/deploy.sh
+        
+        # 创建压缩包以便传输
+        tar -czf deploy-package.tar.gz deploy-package/
+        ls -lh deploy-package/
+    
+    - name: 部署到宝塔服务器
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.BAOTA_HOST }}
+        username: ${{ secrets.BAOTA_USER }}
+        key: ${{ secrets.BAOTA_SSH_KEY }}
+        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        source: "deploy-package.tar.gz"
+        target: "/tmp"
+        strip_components: 1
+    
+    - name: 解压并执行部署脚本
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.BAOTA_HOST }}
+        username: ${{ secrets.BAOTA_USER }}
+        key: ${{ secrets.BAOTA_SSH_KEY }}
+        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        script: |
+          cd /tmp
+          tar -xzf deploy-package.tar.gz
+          cd deploy-package
+          sudo ./deploy.sh
+          rm -rf /tmp/deploy-package /tmp/deploy-package.tar.gz
+          echo "部署完成！"
+    
+    - name: 验证部署
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.BAOTA_HOST }}
+        username: ${{ secrets.BAOTA_USER }}
+        key: ${{ secrets.BAOTA_SSH_KEY }}
+        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        script: |
+          echo "=== 验证服务状态 ==="
+          systemctl status minilpa-backend --no-pager -l || true
+          systemctl status minilpa-agent --no-pager -l || true
+
