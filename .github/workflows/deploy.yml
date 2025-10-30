@@ -54,14 +54,24 @@ jobs:
         fi
         echo "找到后端目录: $BACKEND_DIR"
         cd "$BACKEND_DIR"
-        # 如果存在 gradlew，使用它；否则使用 java 直接运行 wrapper jar
-        if [ -f "./gradlew" ]; then
+        # 创建 gradlew 脚本（如果不存在）
+        if [ ! -f "./gradlew" ]; then
+          echo "创建 gradlew 脚本..."
+          cat > gradlew << 'GRADLEW_EOF'
+        #!/bin/sh
+        ##############################################################################
+        # Gradle Startup Script for POSIX
+        ##############################################################################
+        APP_NAME="Gradle"
+        APP_BASE_NAME=`basename "$0"`
+        APP_HOME=`pwd`
+        CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+        exec java $DEFAULT_JVM_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        GRADLEW_EOF
           chmod +x ./gradlew
-          ./gradlew clean bootJar --no-daemon
-        else
-          # 使用 java 直接运行 Gradle wrapper
-          java -jar gradle/wrapper/gradle-wrapper.jar clean bootJar --no-daemon
         fi
+        ./gradlew clean bootJar --no-daemon
     
     - name: 构建本地代理
       run: |
@@ -73,12 +83,24 @@ jobs:
         fi
         echo "找到代理目录: $AGENT_DIR"
         cd "$AGENT_DIR"
-        if [ -f "./gradlew" ]; then
+        # 创建 gradlew 脚本（如果不存在）
+        if [ ! -f "./gradlew" ]; then
+          echo "创建 gradlew 脚本..."
+          cat > gradlew << 'GRADLEW_EOF'
+        #!/bin/sh
+        ##############################################################################
+        # Gradle Startup Script for POSIX
+        ##############################################################################
+        APP_NAME="Gradle"
+        APP_BASE_NAME=`basename "$0"`
+        APP_HOME=`pwd`
+        CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+        exec java $DEFAULT_JVM_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        GRADLEW_EOF
           chmod +x ./gradlew
-          ./gradlew clean build --no-daemon
-        else
-          java -jar gradle/wrapper/gradle-wrapper.jar clean build --no-daemon
         fi
+        ./gradlew clean build --no-daemon
     
     - name: 构建前端
       run: |
