@@ -348,10 +348,10 @@ jobs:
     - name: 部署到宝塔服务器
       uses: appleboy/scp-action@v0.1.7
       with:
-        host: ${{ secrets.BAOTA_HOST }}
-        username: ${{ secrets.BAOTA_USER }}
-        key: ${{ secrets.BAOTA_SSH_KEY }}
-        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        host: ${{ secrets.SSH_HOST  }}
+        username: ${{ secrets.SSH_USER  }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT  || 22 }}
         source: "deploy-package.tar.gz"
         target: "/tmp"
         strip_components: 0
@@ -359,10 +359,10 @@ jobs:
     - name: 验证文件上传
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.BAOTA_HOST }}
-        username: ${{ secrets.BAOTA_USER }}
-        key: ${{ secrets.BAOTA_SSH_KEY }}
-        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        host: ${{ secrets.SSH_HOST  }}
+        username: ${{ secrets.SSH_USER  }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT  || 22 }}
         script: |
           echo "=== 验证部署包是否上传成功 ==="
           if [ -f "/tmp/deploy-package.tar.gz" ]; then
@@ -378,10 +378,10 @@ jobs:
     - name: 解压并执行部署脚本
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.BAOTA_HOST }}
-        username: ${{ secrets.BAOTA_USER }}
-        key: ${{ secrets.BAOTA_SSH_KEY }}
-        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        host: ${{ secrets.SSH_HOST  }}
+        username: ${{ secrets.SSH_USER  }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT  || 22 }}
         script: |
           cd /tmp
           echo "=== 步骤1: 检查部署包 ==="
@@ -417,10 +417,10 @@ jobs:
     - name: 验证部署
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.BAOTA_HOST }}
-        username: ${{ secrets.BAOTA_USER }}
-        key: ${{ secrets.BAOTA_SSH_KEY }}
-        port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
+        host: ${{ secrets.SSH_HOST  }}
+        username: ${{ secrets.SSH_USER  }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT  || 22 }}
         script: |
           echo "=== 验证服务状态 ==="
           echo ""
