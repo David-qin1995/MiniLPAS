@@ -7,13 +7,12 @@ COPY local-agent /build/local-agent
 RUN gradle clean build -x test --no-daemon
 
 # ---------- Runtime stage ----------
-FROM debian:12-slim
+FROM eclipse-temurin:21-jre
 ENV DEBIAN_FRONTEND=noninteractive
 
-# pcsc-lite + CCID 驱动 + 运行时需要的依赖
+# pcsc-lite + CCID 驱动 + 运行时需要的依赖（JRE 已由基础镜像提供）
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-    openjdk-21-jre-headless \
     pcscd pcsc-tools libccid usbutils \
     ca-certificates \
  && rm -rf /var/lib/apt/lists/*
