@@ -1,0 +1,75 @@
+====================================
+将公钥添加到服务器 - 多种方法
+====================================
+
+方法 1：通过 SSH 命令行（推荐，最简单）
+---------------------------------------
+
+前提：你需要知道服务器 root 密码
+
+步骤：
+1. 打开 PowerShell 或 CMD
+2. 执行（替换成你的服务器IP）：
+   ssh root@你的服务器IP
+   
+3. 输入 root 密码（输入时不会显示，正常输入后按回车）
+
+4. 登录成功后，依次执行以下命令：
+   
+   mkdir -p ~/.ssh
+   chmod 700 ~/.ssh
+   echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDawcALlgdZy5mkLlPC+Pz3Qwwf9rlUKPs/Er4nYva3B5wvX4oJpK9uL8JUxAdiewB2QRx9MY4sTt4M4L/1cpLTctjs8PeGiMDVFLbkktZIpFFTjWTClwXPvGyNzr0k4d6m6C1BTLnrEZ8DEo0EWl21OdHx9ltGyUu03MbuWz2u6lnJgihMEtSBiBdYLc+6NAj/sV3CCa4zR4HS5skb8AvvrIhbZJhJRILWGBBb2S/Arm8Ah94kuw1OgdZ59Lo6CUlKe19AtWg/vQYJ7spuG6miOe9TNJJVNu4EHNVh1WYI/e2I1PBHJK/OMqYJA+dptF4kyV/RAox5Zw3BTpxXvuhzbuaX54it/V6PtD6JrBVLdPM8whfYvaFcOMDv5rb4sXhFa/OW9MCyYNEdFgz4ca+TNF7UpqVUOyF0WjXsPJ+VCkMbRXTlAakeS+IsvArruZwmP0deLF+1XrumVtzq5gyp+kSqFd8SRFOa4dcBi2gwaq1983sGPP9r0mY42t2KiCIzKJVOYq8SxcwsA38LSbntU7AhHudP66SM1JX7faAMojQjBMAq5RaMXTOqsnFcNn0+3tYCzLfSBYEM5fAcVX5nxQjOQI8soIcY0nNpnPpP2Hp5Kl5TRvpgz5hzqVXRgRd9Tnb6gSdSa/w9103cuM1Qmw/xR9GDTw3d+e8ajvgdIQ== github-ci-cd" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   exit
+
+5. ✅ 完成！
+
+
+方法 2：通过宝塔文件管理器（如果SSH已配置）
+---------------------------------------
+
+步骤：
+1. 登录宝塔面板
+2. 点击左侧：文件
+3. 进入路径：/root/.ssh/
+   （如果没有这个文件夹，先创建）
+
+4. 检查是否有 authorized_keys 文件
+   - 如果有：点击编辑，在末尾添加公钥（换行）
+   - 如果没有：点击新建文件，文件名输入：authorized_keys
+
+5. 添加的公钥内容（复制下面这一行）：
+   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDawcALlgdZy5mkLlPC+Pz3Qwwf9rlUKPs/Er4nYva3B5wvX4oJpK9uL8JUxAdiewB2QRx9MY4sTt4M4L/1cpLTctjs8PeGiMDVFLbkktZIpFFTjWTClwXPvGyNzr0k4d6m6C1BTLnrEZ8DEo0EWl21OdHx9ltGyUu03MbuWz2u6lnJgihMEtSBiBdYLc+6NAj/sV3CCa4zR4HS5skb8AvvrIhbZJhJRILWGBBb2S/Arm8Ah94kuw1OgdZ59Lo6CUlKe19AtWg/vQYJ7spuG6miOe9TNJJVNu4EHNVh1WYI/e2I1PBHJK/OMqYJA+dptF4kyV/RAox5Zw3BTpxXvuhzbuaX54it/V6PtD6JrBVLdPM8whfYvaFcOMDv5rb4sXhFa/OW9MCyYNEdFgz4ca+TNF7UpqVUOyF0WjXsPJ+VCkMbRXTlAakeS+IsvArruZwmP0deLF+1XrumVtzq5gyp+kSqFd8SRFOa4dcBi2gwaq1983sGPP9r0mY42t2KiCIzKJVOYq8SxcwsA38LSbntU7AhHudP66SM1JX7faAMojQjBMAq5RaMXTOqsnFcNn0+3tYCzLfSBYEM5fAcVX5nxQjOQI8soIcY0nNpnPpP2Hp5Kl5TRvpgz5hzqVXRgRd9Tnb6gSdSa/w9103cuM1Qmw/xR9GDTw3d+e8ajvgdIQ== github-ci-cd
+
+6. 保存文件
+7. 设置文件权限为 600（在文件右侧点击权限按钮）
+
+
+方法 3：通过宝塔终端（推荐）
+---------------------------------------
+
+步骤：
+1. 登录宝塔面板
+2. 点击左侧：终端（或 命令行）
+3. 在终端中依次执行：
+
+   mkdir -p ~/.ssh
+   chmod 700 ~/.ssh
+   echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDawcALlgdZy5mkLlPC+Pz3Qwwf9rlUKPs/Er4nYva3B5wvX4oJpK9uL8JUxAdiewB2QRx9MY4sTt4M4L/1cpLTctjs8PeGiMDVFLbkktZIpFFTjWTClwXPvGyNzr0k4d6m6C1BTLnrEZ8DEo0EWl21OdHx9ltGyUu03MbuWz2u6lnJgihMEtSBiBdYLc+6NAj/sV3CCa4zR4HS5skb8AvvrIhbZJhJRILWGBBb2S/Arm8Ah94kuw1OgdZ59Lo6CUlKe19AtWg/vQYJ7spuG6miOe9TNJJVNu4EHNVh1WYI/e2I1PBHJK/OMqYJA+dptF4kyV/RAox5Zw3BTpxXvuhzbuaX54it/V6PtD6JrBVLdPM8whfYvaFcOMDv5rb4sXhFa/OW9MCyYNEdFgz4ca+TNF7UpqVUOyF0WjXsPJ+VCkMbRXTlAakeS+IsvArruZwmP0deLF+1XrumVtzq5gyp+kSqFd8SRFOa4dcBi2gwaq1983sGPP9r0mY42t2KiCIzKJVOYq8SxcwsA38LSbntU7AhHudP66SM1JX7faAMojQjBMAq5RaMXTOqsnFcNn0+3tYCzLfSBYEM5fAcVX5nxQjOQI8soIcY0nNpnPpP2Hp5Kl5TRvpgz5hzqVXRgRd9Tnb6gSdSa/w9103cuM1Qmw/xR9GDTw3d+e8ajvgdIQ== github-ci-cd" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   
+4. ✅ 完成！
+
+
+====================================
+验证是否成功
+====================================
+
+在本地 PowerShell 测试连接：
+
+ssh -i $HOME\.ssh\baota_github_key root@你的服务器IP
+
+如果能够连接（不要求输入密码），说明成功！
+
+====================================
+
