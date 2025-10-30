@@ -187,9 +187,21 @@ jobs:
         
         # 1. 停止服务
         echo "1. 停止服务..."
-        systemctl stop minilpa-backend 2>/dev/null || true
-        systemctl stop minilpa-agent 2>/dev/null || true
-        sleep 2
+        systemctl stop minilpa-backend 2>/dev/null || echo "   ⚠️  后端服务未运行或停止失败"
+        systemctl stop minilpa-agent 2>/dev/null || echo "   ⚠️  代理服务未运行或停止失败"
+        # 等待服务完全停止
+        sleep 3
+        # 确认服务已停止
+        if systemctl is-active --quiet minilpa-backend; then
+          echo "   ⚠️  后端服务仍在运行，强制停止..."
+          systemctl kill -s SIGKILL minilpa-backend 2>/dev/null || true
+          sleep 2
+        fi
+        if systemctl is-active --quiet minilpa-agent; then
+          echo "   ⚠️  代理服务仍在运行，强制停止..."
+          systemctl kill -s SIGKILL minilpa-agent 2>/dev/null || true
+          sleep 2
+        fi
         
         # 2. 备份旧文件
         echo "2. 备份旧文件..."
@@ -248,13 +260,16 @@ jobs:
         chown -R www:www "$INSTALL_DIR" 2>/dev/null || chown -R $USER:$USER "$INSTALL_DIR"
         chmod 644 "$INSTALL_DIR/app"/*.jar 2>/dev/null || true
         
-        # 5. 启动服务
-        echo "5. 启动服务..."
+        # 5. 重启服务（确保使用新文件）
+        echo "5. 重启服务..."
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable minilpa-backend 2>/dev/null || true
         systemctl enable minilpa-agent 2>/dev/null || true
-        systemctl start minilpa-backend
-        systemctl start minilpa-agent
+        # 使用 restart 而不是 start，确保服务真正重启
+        echo "   重启后端服务..."
+        systemctl restart minilpa-backend || systemctl start minilpa-backend
+        echo "   重启代理服务..."
+        systemctl restart minilpa-agent || systemctl start minilpa-agent
         
         sleep 3
         
