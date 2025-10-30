@@ -102,7 +102,7 @@ jobs:
         mkdir -p deploy-package/config
         
         # 查找并复制后端JAR（过滤掉 plain jar）
-        BACKEND_DIR=$(find . -type d指定的路径 -name "web-backend" | grep -v node_modules | head -1)
+        BACKEND_DIR=$(find . -type d -name "web-backend" | grep -v node_modules | head -1)
         BACKEND_JAR=$(find "$BACKEND_DIR/build/libs" -name "*.jar" ! -name "*-plain.jar" | head -1)
         if [ -n "$BACKEND_JAR" ]; then
           cp "$BACKEND_JAR" deploy-package/app/minilpa-backend.jar
