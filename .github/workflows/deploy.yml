@@ -173,6 +173,7 @@ jobs:
         cat > deploy-package/deploy.sh << 'DEPLOYSCRIPT'
         #!/bin/bash
         # 不使用 set -e，避免因为权限警告导致脚本退出
+        # 只在关键步骤检查错误
         set -u
         
         INSTALL_DIR="/www/wwwroot/minilpa"
@@ -279,23 +280,37 @@ jobs:
         sleep 3
         
         # 检查服务状态
+        BACKEND_STATUS=0
+        AGENT_STATUS=0
         if systemctl is-active --quiet minilpa-backend; then
           echo "   ✅ 后端服务启动成功"
+          BACKEND_STATUS=0
         else
           echo "   ⚠️  后端服务启动失败"
           echo "   查看日志: sudo journalctl -u minilpa-backend -n 50"
+          BACKEND_STATUS=1
         fi
         
         if systemctl is-active --quiet minilpa-agent; then
           echo "   ✅ 代理服务启动成功"
+          AGENT_STATUS=0
         else
           echo "   ⚠️  代理服务启动失败"
           echo "   查看日志: sudo journalctl -u minilpa-agent -n 50"
+          AGENT_STATUS= marker1
         fi
         
         echo ""
         echo "=== 部署完成 ==="
         echo "备份位置: $BACKUP_DIR"
+        
+        # 只有在服务都启动失败时才退出
+        if [ $BACKEND_STATUS -ne 0 ] && [ $AGENT_STATUS -ne 0 ]; then
+          echo "❌ 错误: 后端和代理服务都启动失败"
+          exit 1
+        fi
+        # 否则即使有一个失败，也认为部署成功（文件已更新）
+        exit 0
         DEPLOYSCRIPT
         chmod +x deploy-package/deploy.sh
         
