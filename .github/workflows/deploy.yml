@@ -206,13 +206,27 @@ jobs:
         mkdir -p "$INSTALL_DIR/app" "$INSTALL_DIR/frontend" "$INSTALL_DIR/config" "$INSTALL_DIR/logs"
         
         # 复制JAR文件
+        echo "检查部署包中的文件..."
+        ls -la app/ 2>&1 || echo "⚠️ app 目录不存在"
         if [ -f "app/minilpa-backend.jar" ]; then
           cp app/minilpa-backend.jar "$INSTALL_DIR/app/" -f
-          echo "   ✅ 后端JAR已更新"
+          if [ -f "$INSTALL_DIR/app/minilpa-backend.jar" ]; then
+            echo "   ✅ 后端JAR已更新: $(ls -lh "$INSTALL_DIR/app/minilpa-backend.jar" | awk '{print $5, $6, $7, $8}')"
+          else
+            echo "   ❌ 后端JAR复制失败"
+          fi
+        else
+          echo "   ⚠️  未找到 app/minilpa-backend.jar"
         fi
         if [ -f "app/minilpa-agent.jar" ]; then
           cp app/minilpa-agent.jar "$INSTALL_DIR/app/" -f
-          echo "   ✅ 代理JAR已更新"
+          if [ -f "$INSTALL_DIR/app/minilpa-agent.jar" ]; then
+            echo "   ✅ 代理JAR已更新: $(ls -lh "$INSTALL_DIR/app/minilpa-agent.jar" | awk '{print $5, $6, $7, $8}')"
+          else
+            echo "   ❌ 代理JAR复制失败"
+          fi
+        else
+          echo "   ⚠️  未找到 app/minilpa-agent.jar"
         fi
         
         # 复制前端文件
@@ -289,9 +303,33 @@ jobs:
         port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
         script: |
           cd /tmp
+          echo "=== 步骤1: 检查部署包 ==="
+          ls -lh deploy-package.tar.gz || { echo "错误: 找不到部署包"; exit 1; }
+          echo ""
+          echo "=== 步骤2: 解压部署包 ==="
           tar -xzf deploy-package.tar.gz
           cd deploy-package
+          echo "部署包内容："
+          ls -la
+          echo ""
+          echo "检查关键文件："
+          ls -la app/ 2>&1 || echo "⚠️ app 目录不存在"
+          ls -la frontend/ 2>&1 | head -5 || echo "⚠️ frontend 目录不存在"
+          echo ""
+          echo "=== 步骤3: 执行部署脚本 ==="
           sudo ./deploy.sh
+          DEPLOY_EXIT_CODE=$?
+          echo ""
+          echo "=== 步骤4: 验证部署结果 ==="
+          echo "检查部署目录："
+          ls -la /www/wwwroot/minilpa/app/ 2>&1 || echo "⚠️ 部署目录不存在"
+          echo ""
+          if [ $DEPLOY_EXIT_CODE -eq 0 ]; then
+            echo "✅ 部署脚本执行成功"
+          else
+            echo "❌ 部署脚本执行失败，退出码: $DEPLOY_EXIT_CODE"
+            exit 1
+          fi
           rm -rf /tmp/deploy-package /tmp/deploy-package.tar.gz
           echo "部署完成！"
     
