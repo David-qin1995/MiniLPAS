@@ -75,7 +75,6 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' }}
     steps:
       - name: Prepare refs
         id: refs
@@ -84,6 +83,7 @@ jobs:
           echo "fe=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest" >> $GITHUB_OUTPUT
 
       - name: SSH deploy
+        if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
