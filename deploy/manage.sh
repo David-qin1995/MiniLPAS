@@ -1,6 +1,6 @@
 #!/bin/bash
 # MiniLPA 服务管理脚本
-# 用于管理 minilpa-backend 和 minilpa-agent 服务
+# 用于管理 minilpa-backend 和 minilpa-agent 服务（优先通过 Docker Compose，其次 systemd）
 
 set -e
 
@@ -15,6 +15,10 @@ NC='\033[0m' # No Color
 BACKEND_SERVICE="minilpa-backend"
 AGENT_SERVICE="minilpa-agent"
 INSTALL_DIR="/www/wwwroot/minilpa"
+WEB_COMPOSE="$INSTALL_DIR/web/docker-compose.yml"
+AGENT_COMPOSE="$INSTALL_DIR/agent/docker-compose.yml"
+DOCKER_BIN=$(command -v docker || true)
+DC_CMD="docker compose"
 
 # 显示帮助信息
 show_help() {
@@ -29,25 +33,18 @@ show_help() {
     echo "  restart      - 重启服务"
     echo "  start        - 启动服务"
     echo "  stop         - 停止服务"
-    echo "  enable       - 设置服务开机自启"
-    echo "  disable      - 取消服务开机自启"
+    echo "  enable       - 设置服务开机自启（systemd 模式）"
+    echo "  disable      - 取消服务开机自启（systemd 模式）"
     echo ""
     echo "仅查看:"
     echo "  health       - 检查服务健康状态（包括API测试）"
-    echo "  info         - 显示服务详细信息"
+    echo "  info         - 显示服务详细信息（systemd 模式）"
     echo "  ports        - 检查端口占用情况"
     echo ""
     echo "服务名称:"
-    echo "  backend      - 后端服务 (minilpa-backend)"
-    echo "  agent        - 代理服务 (minilpa-agent)"
+    echo "  backend      - 后端服务 ($BACKEND_SERVICE)"
+    echo "  agent        - 代理服务 ($AGENT_SERVICE)"
     echo "  all          - 所有服务（默认）"
-    echo ""
-    echo "示例:"
-    echo "  $0                    # 查看所有服务状态"
-    echo "  $0 status backend     # 查看后端服务状态"
-    echo "  $0 logs agent         # 查看代理服务日志"
-    echo "  $0 restart all        # 重启所有服务"
-    echo "  $0 health             # 检查服务健康状态"
 }
 
 # 检查是否为root用户（某些操作需要）
@@ -77,18 +74,34 @@ get_service_name() {
 # 显示服务状态
 show_status() {
     local service_name="$1"
-    
+
+    # Docker 模式优先
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        echo -e "${BLUE}=== Docker 服务状态 ===${NC}\n"
+        if [ -f "$WEB_COMPOSE" ]; then
+            echo -e "${BLUE}[web] $WEB_COMPOSE${NC}"
+            $DC_CMD -f "$WEB_COMPOSE" ps || true
+            echo ""
+        fi
+        if [ -f "$AGENT_COMPOSE" ]; then
+            echo -e "${BLUE}[agent] $AGENT_COMPOSE${NC}"
+            $DC_CMD -f "$AGENT_COMPOSE" ps || true
+            echo ""
+        fi
+        return
+    fi
+
     if [ -z "$service_name" ]; then
-        # 显示所有服务状态
+        # 显示所有服务状态（systemd）
         echo -e "${BLUE}=== 服务状态总览 ===${NC}\n"
         show_status "$BACKEND_SERVICE"
         echo ""
         show_status "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}服务: $service_name${NC}"
-    
+
     if systemctl is-active --quiet "$service_name" 2>/dev/null; then
         echo -e "状态: ${GREEN}运行中 ✓${NC}"
     elif systemctl is-failed --quiet "$service_name" 2>/dev/null; then
@@ -96,14 +109,14 @@ show_status() {
     else
         echo -e "状态: ${YELLOW}已停止${NC}"
     fi
-    
+
     # 显示是否开机自启
     if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
         echo "开机自启: 是"
     else
         echo "开机自启: 否"
     fi
-    
+
     # 显示进程信息
     local pid=$(systemctl show -p MainPID --value "$service_name" 2>/dev/null)
     if [ -n "$pid" ] && [ "$pid" != "0" ]; then
@@ -113,7 +126,7 @@ show_status() {
             ps -p "$pid" -o pid,pcpu,pmem,etime,cmd --no-headers 2>/dev/null | awk '{printf "CPU: %s%%, 内存: %s%%, 运行时间: %s\n", $2, $3, $4}'
         fi
     fi
-    
+
     # 显示最近的日志摘要
     echo -e "\n${BLUE}最近日志:${NC}"
     journalctl -u "$service_name" -n 3 --no-pager --no-full 2>/dev/null | tail -3 | sed 's/^/  /' || echo "  无法获取日志"
@@ -123,13 +136,30 @@ show_status() {
 show_logs() {
     local service_name="$1"
     local lines="${2:-50}"
-    
+
+    # Docker 模式
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        if [ -z "$service_name" ]; then
+            echo -e "${YELLOW}请指定服务名称 (backend 或 agent)${NC}"
+            return 1
+        fi
+        case "$service_name" in
+            backend)
+                [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" logs --tail "$lines" backend || true
+                ;;
+            agent)
+                [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" logs --tail "$lines" minilpa-agent || true
+                ;;
+        esac
+        return
+    fi
+
     if [ -z "$service_name" ]; then
         echo -e "${YELLOW}请指定服务名称 (backend 或 agent)${NC}"
         echo "用法: $0 logs [backend|agent] [行数，默认50]"
         return 1
     fi
-    
+
     echo -e "${BLUE}=== $service_name 服务日志（最近 $lines 行）===${NC}\n"
     journalctl -u "$service_name" -n "$lines" --no-pager
 }
@@ -137,12 +167,25 @@ show_logs() {
 # 查看实时日志
 show_logs_follow() {
     local service_name="$1"
-    
+
+    # Docker 模式
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        case "$service_name" in
+            backend)
+                [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" logs -f backend || true
+                ;;
+            agent)
+                [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" logs -f minilpa-agent || true
+                ;;
+        esac
+        return
+    fi
+
     if [ -z "$service_name" ]; then
         echo -e "${YELLOW}请指定服务名称 (backend 或 agent)${NC}"
         return 1
     fi
-    
+
     echo -e "${BLUE}=== $service_name 实时日志 (按 Ctrl+C 退出) ===${NC}\n"
     journalctl -u "$service_name" -f
 }
@@ -150,9 +193,28 @@ show_logs_follow() {
 # 重启服务
 restart_service() {
     local service_name="$1"
-    
+
+    # Docker 模式
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        if [ -z "$service_name" ]; then
+            echo -e "${BLUE}重启所有 Docker 服务...${NC}"
+            [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" up -d --remove-orphans
+            [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" up -d --remove-orphans
+            return
+        fi
+        case "$service_name" in
+            "$BACKEND_SERVICE")
+                [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" up -d backend || true
+                ;;
+            "$AGENT_SERVICE")
+                [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" up -d minilpa-agent || true
+                ;;
+        esac
+        return
+    fi
+
     check_root || return 1
-    
+
     if [ -z "$service_name" ]; then
         echo -e "${BLUE}重启所有服务...${NC}"
         restart_service "$BACKEND_SERVICE"
@@ -160,15 +222,15 @@ restart_service() {
         restart_service "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}正在重启服务: $service_name${NC}"
     systemctl restart "$service_name" || {
         echo -e "${RED}重启失败！${NC}"
         return 1
     }
-    
+
     sleep 2
-    
+
     if systemctl is-active --quiet "$service_name"; then
         echo -e "${GREEN}✓ 服务已成功重启${NC}"
     else
@@ -181,9 +243,28 @@ restart_service() {
 # 启动服务
 start_service() {
     local service_name="$1"
-    
+
+    # Docker 模式
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        if [ -z "$service_name" ]; then
+            echo -e "${BLUE}启动所有 Docker 服务...${NC}"
+            [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" up -d
+            [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" up -d
+            return
+        fi
+        case "$service_name" in
+            "$BACKEND_SERVICE")
+                [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" up -d backend || true
+                ;;
+            "$AGENT_SERVICE")
+                [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" up -d minilpa-agent || true
+                ;;
+        esac
+        return
+    fi
+
     check_root || return 1
-    
+
     if [ -z "$service_name" ]; then
         echo -e "${BLUE}启动所有服务...${NC}"
         start_service "$BACKEND_SERVICE"
@@ -191,21 +272,21 @@ start_service() {
         start_service "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}正在启动服务: $service_name${NC}"
-    
+
     if systemctl is-active --quiet "$service_name"; then
         echo -e "${YELLOW}服务已在运行中${NC}"
         return 0
     fi
-    
+
     systemctl start "$service_name" || {
         echo -e "${RED}启动失败！${NC}"
         return 1
     }
-    
+
     sleep 2
-    
+
     if systemctl is-active --quiet "$service_name"; then
         echo -e "${GREEN}✓ 服务已成功启动${NC}"
     else
@@ -218,30 +299,49 @@ start_service() {
 # 停止服务
 stop_service() {
     local service_name="$1"
-    
+
+    # Docker 模式
+    if [ -n "$DOCKER_BIN" ] && { [ -f "$WEB_COMPOSE" ] || [ -f "$AGENT_COMPOSE" ]; }; then
+        if [ -z "$service_name" ]; then
+            echo -e "${BLUE}停止所有 Docker 服务...${NC}"
+            [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" down || true
+            [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" down || true
+            return
+        fi
+        case "$service_name" in
+            "$BACKEND_SERVICE")
+                [ -f "$WEB_COMPOSE" ] && $DC_CMD -f "$WEB_COMPOSE" stop backend || true
+                ;;
+            "$AGENT_SERVICE")
+                [ -f "$AGENT_COMPOSE" ] && $DC_CMD -f "$AGENT_COMPOSE" stop minilpa-agent || true
+                ;;
+        esac
+        return
+    fi
+
     check_root || return 1
-    
+
     if [ -z "$service_name" ]; then
         echo -e "${BLUE}停止所有服务...${NC}"
         stop_service "$BACKEND_SERVICE"
         stop_service "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}正在停止服务: $service_name${NC}"
-    
+
     if ! systemctl is-active --quiet "$service_name"; then
         echo -e "${YELLOW}服务已停止${NC}"
         return 0
     fi
-    
+
     systemctl stop "$service_name" || {
         echo -e "${RED}停止失败！${NC}"
         return 1
     }
-    
+
     sleep 1
-    
+
     if ! systemctl is-active --quiet "$service_name"; then
         echo -e "${GREEN}✓ 服务已成功停止${NC}"
     else
@@ -250,36 +350,36 @@ stop_service() {
     fi
 }
 
-# 设置开机自启
+# 设置开机自启（systemd）
 enable_service() {
     local service_name="$1"
-    
+
     check_root || return 1
-    
+
     if [ -z "$service_name" ]; then
         echo -e "${BLUE}设置所有服务开机自启...${NC}"
         enable_service "$BACKEND_SERVICE"
         enable_service "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}设置服务开机自启: $service_name${NC}"
     systemctl enable "$service_name" && echo -e "${GREEN}✓ 已设置开机自启${NC}"
 }
 
-# 取消开机自启
+# 取消开机自启（systemd）
 disable_service() {
     local service_name="$1"
-    
+
     check_root || return 1
-    
+
     if [ -z "$service_name" ]; then
         echo -e "${BLUE}取消所有服务开机自启...${NC}"
         disable_service "$BACKEND_SERVICE"
         disable_service "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}取消服务开机自启: $service_name${NC}"
     systemctl disable "$service_name" && echo -e "${GREEN}✓ 已取消开机自启${NC}"
 }
@@ -287,93 +387,51 @@ disable_service() {
 # 检查服务健康状态
 check_health() {
     echo -e "${BLUE}=== 服务健康检查 ===${NC}\n"
-    
+
     # 检查后端服务
     echo -e "${BLUE}1. 后端服务状态:${NC}"
-    if systemctl is-active --quiet "$BACKEND_SERVICE"; then
-        echo -e "  ${GREEN}✓ 服务运行中${NC}"
-        
-        # 测试API
-        echo "  测试API连接..."
-        if curl -s -f -m 5 http://127.0.0.1:8080/api/devices/status > /dev/null 2>&1; then
-            echo -e "  ${GREEN}✓ API可访问${NC}"
-            
-            # 获取状态信息
-            local response=$(curl -s http://127.0.0.1:8080/api/devices/status 2>/dev/null)
-            if echo "$response" | grep -q "connected"; then
-                echo "  响应: $response" | head -200
-            fi
-        else
-            echo -e "  ${RED}✗ API无法访问${NC}"
-        fi
+    if curl -s -f -m 5 http://127.0.0.1:8080/api/devices/status > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ API可访问${NC}"
+        local response=$(curl -s http://127.0.0.1:8080/api/devices/status 2>/dev/null)
+        echo "  响应: $response" | head -200
     else
-        echo -e "  ${RED}✗ 服务未运行${NC}"
+        echo -e "  ${RED}✗ API无法访问${NC}"
     fi
-    
+
     echo ""
-    
-    # 检查代理服务
-    echo -e "${BLUE}2. 代理服务状态:${NC}"
-    if systemctl is-active --quiet "$AGENT_SERVICE"; then
-        echo -e "  ${GREEN}✓ 服务运行中${NC}"
-        
-        # 检查最近的连接日志
-        local recent_logs=$(journalctl -u "$AGENT_SERVICE" -n 10 --no-pager 2>/dev/null | grep -i "连接\|connected\|websocket" | tail -3)
-        if [ -n "$recent_logs" ]; then
-            echo "  最近连接日志:"
-            echo "$recent_logs" | sed 's/^/  /'
-        fi
-    else
-        echo -e "  ${RED}✗ 服务未运行${NC}"
+
+    # 检查代理服务（容器是否运行）
+    if [ -n "$DOCKER_BIN" ] && [ -f "$AGENT_COMPOSE" ]; then
+        echo -e "${BLUE}2. 代理服务容器:${NC}"
+        $DC_CMD -f "$AGENT_COMPOSE" ps || true
     fi
-    
+
     echo ""
-    
-    # 检查端口
+
+    # 端口检查
     echo -e "${BLUE}3. 端口占用情况:${NC}"
-    if command -v netstat > /dev/null 2>&1; then
-        netstat -tlnp 2>/dev/null | grep -E ":8080|:8081" | sed 's/^/  /' || echo "  未发现相关端口监听"
-    elif command -v ss > /dev/null 2>&1; then
+    if command -v ss > /dev/null 2>&1; then
         ss -tlnp 2>/dev/null | grep -E ":8080|:8081" | sed 's/^/  /' || echo "  未发现相关端口监听"
+    elif command -v netstat > /dev/null 2>&1; then
+        netstat -tlnp 2>/dev/null | grep -E ":8080|:8081" | sed 's/^/  /' || echo "  未发现相关端口监听"
     else
-        echo "  无法检查端口（需要 netstat 或 ss）"
-    fi
-    
-    echo ""
-    
-    # 检查文件
-    echo -e "${BLUE}4. 文件检查:${NC}"
-    if [ -f "$INSTALL_DIR/app/minilpa-backend.jar" ]; then
-        local size=$(ls -lh "$INSTALL_DIR/app/minilpa-backend.jar" | awk '{print $5}')
-        echo "  后端JAR: ✓ 存在 ($size)"
-    else
-        echo -e "  后端JAR: ${RED}✗ 不存在${NC}"
-    fi
-    
-    if [ -f "$INSTALL_DIR/app/minilpa-agent.jar" ]; then
-        local size=$(ls -lh "$INSTALL_DIR/app/minilpa-agent.jar" | awk '{print $5}')
-        echo "  代理JAR: ✓ 存在 ($size)"
-    else
-        echo -e "  代理JAR: ${RED}✗ 不存在${NC}"
+        echo "  无法检查端口（需要 ss 或 netstat）"
     fi
 }
 
-# 显示服务详细信息
+# 显示服务详细信息（systemd）
 show_info() {
     local service_name="$1"
-    
+
     if [ -z "$service_name" ]; then
         show_info "$BACKEND_SERVICE"
         echo ""
         show_info "$AGENT_SERVICE"
         return
     fi
-    
+
     echo -e "${BLUE}=== $service_name 详细信息 ===${NC}\n"
-    
-    # 显示systemd服务状态
     systemctl status "$service_name" --no-pager -l | head -20
-    
     echo ""
     echo -e "${BLUE}服务文件路径:${NC}"
     systemctl cat "$service_name" 2>/dev/null | head -30 || echo "无法读取服务文件"
@@ -382,21 +440,15 @@ show_info() {
 # 检查端口占用
 check_ports() {
     echo -e "${BLUE}=== 端口占用情况 ===${NC}\n"
-    
-    if command -v netstat > /dev/null 2>&1; then
-        echo "8080端口（后端）:"
-        netstat -tlnp 2>/dev/null | grep ":8080" | sed 's/^/  /' || echo "  未监听"
-        echo ""
-        echo "其他相关端口:"
-        netstat -tlnp 2>/dev/null | grep -E ":8081|:3000" | sed 's/^/  /' || echo "  未发现"
-    elif command -v ss > /dev/null 2>&1; then
-        echo "8080端口（后端）:"
-        ss -tlnp 2>/dev/null | grep ":8080" | sed 's/^/  /' || echo "  未监听"
-        echo ""
-        echo "其他相关端口:"
-        ss -tlnp 2>/dev/null | grep -E ":8081|:3000" | sed 's/^/  /' || echo "  未发现"
+
+    if command -v ss > /dev/null 2>&1; then
+        echo "8080/8081 监听:"
+        ss -tlnp 2>/dev/null | grep -E ":8080|:8081" | sed 's/^/  /' || echo "  未发现"
+    elif command -v netstat > /dev/null 2>&1; then
+        echo "8080/8081 监听:"
+        netstat -tlnp 2>/dev/null | grep -E ":8080|:8081" | sed 's/^/  /' || echo "  未发现"
     else
-        echo "错误: 系统未安装 netstat 或 ss"
+        echo "错误: 系统未安装 ss 或 netstat"
     fi
 }
 
@@ -404,7 +456,7 @@ check_ports() {
 main() {
     local command="${1:-status}"
     local service="${2:-all}"
-    
+
     case "$command" in
         status|st)
             if [ "$service" = "all" ]; then
@@ -430,14 +482,13 @@ main() {
                 echo -e "${RED}错误: 未知的服务名称 '$service'${NC}"
                 exit 1
             fi
-            # 检查是否有 -f 参数（实时日志）
             if [ "$3" = "-f" ] || [ "$3" = "--follow" ]; then
-                show_logs_follow "$svc"
+                show_logs_follow "$service"
             else
-                show_logs "$svc" "${3:-50}"
+                show_logs "$service" "${3:-50}"
             fi
             ;;
-        restart|restart)
+        restart)
             if [ "$service" = "all" ]; then
                 restart_service
             else
