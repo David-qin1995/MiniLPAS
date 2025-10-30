@@ -77,6 +77,22 @@ jobs:
         fi
         echo "找到代理目录: $AGENT_DIR"
         cd "$AGENT_DIR"
+        # 检查并创建 gradle-wrapper.jar（如果不存在）
+        if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "gradle-wrapper.jar 不存在，从 web-backend 复制..."
+          mkdir -p ./gradle/wrapper
+          # 查找 web-backend 目录中的 gradle-wrapper.jar
+          BACKEND_WRAPPER=$(find "$(pwd)/../.." -path "*/web-backend/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null | head -1)
+          if [ -n "$BACKEND_WRAPPER" ] && [ -f "$BACKEND_WRAPPER" ]; then
+            cp "$BACKEND_WRAPPER" ./gradle/wrapper/gradle-wrapper.jar
+            echo "已从 web-backend 复制 gradle-wrapper.jar"
+          else
+            echo "错误: 找不到 gradle-wrapper.jar，尝试下载..."
+            # 如果找不到，可以尝试下载（但这里先报错）
+            echo "请确保 web-backend 目录中有 gradle-wrapper.jar"
+            exit 1
+          fi
+        fi
         # 创建 gradlew 脚本（如果不存在）
         if [ ! -f "./gradlew" ]; then
           echo "创建 gradlew 脚本..."
