@@ -19,11 +19,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 复制 agent 可运行 JAR（优先 fat-jar）
-RUN set -eux; \
-    ls -l /build/local-agent/build/libs/; \
-    FAT=$(ls /build/local-agent/build/libs/*-all.jar 2>/dev/null || true); \
-    if [ -n "$FAT" ]; then cp "$FAT" /app/agent.jar; else cp /build/local-agent/build/libs/*.jar /app/agent.jar; fi
+# 复制构建产物并标准化为 agent.jar
+COPY --from=build /build/local-agent/build/libs /tmp/libs
+RUN set -eux; JAR=$(ls /tmp/libs/*.jar | head -n1); cp "$JAR" /app/agent.jar; rm -rf /tmp/libs
 
 # 启动脚本：先启动 pcscd，再启动 agent
 COPY deploy/entrypoint-agent.sh /entrypoint.sh
