@@ -57,17 +57,11 @@ jobs:
         # 创建 gradlew 脚本（如果不存在）
         if [ ! -f "./gradlew" ]; then
           echo "创建 gradlew 脚本..."
-          cat > gradlew << 'GRADLEW_EOF'
+防守 cat > gradlew << 'GRADLEW_EOF'
         #!/bin/sh
-        ##############################################################################
-        # Gradle Startup Script for POSIX
-        ##############################################################################
-        APP_NAME="Gradle"
-        APP_BASE_NAME=`basename "$0"`
         APP_HOME=`pwd`
         CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
-        exec java $DEFAULT_JVM_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        exec java -Xmx64m -Xms64m -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
         GRADLEW_EOF
           chmod +x ./gradlew
         fi
@@ -86,17 +80,11 @@ jobs:
         # 创建 gradlew 脚本（如果不存在）
         if [ ! -f "./gradlew" ]; then
           echo "创建 gradlew 脚本..."
-          cat > gradlew << 'GRADLEW_EOF'
+防守 cat > gradlew << 'GRADLEW_EOF'
         #!/bin/sh
-        ##############################################################################
-        # Gradle Startup Script for POSIX
-        ##############################################################################
-        APP_NAME="Gradle"
-        APP_BASE_NAME=`basename "$0"`
         APP_HOME=`pwd`
         CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
-        exec java $DEFAULT_JVM_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        exec java -Xmx64m -Xms64m -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
         GRADLEW_EOF
           chmod +x ./gradlew
         fi
