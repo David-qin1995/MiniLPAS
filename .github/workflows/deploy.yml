@@ -278,18 +278,29 @@ jobs:
         echo "   重启代理服务..."
         systemctl restart minilpa-agent || systemctl start minilpa-agent
         
-        sleep 3
+        sleep 5
         
         # 检查服务状态
         BACKEND_STATUS=0
         AGENT_STATUS=0
+        
         if systemctl is-active --quiet minilpa-backend; then
           echo "   ✅ 后端服务启动成功"
           BACKEND_STATUS=0
         else
           echo "   ⚠️  后端服务启动失败"
-          echo "   查看日志: sudo journalctl -u minilpa-backend -n 50"
+          echo "   === 后端服务状态 ==="
+          systemctl status minilpa-backend --no-pager -l | head -20
+          echo ""
+          echo "   === 后端服务最近日志 ==="
+          journalctl -u minilpa-backend -n 30 --no-pager | tail -20
           BACKEND_STATUS=1
+        fi
+        
+        # 等待后端完全启动（如果后端刚启动，给代理更多时间）
+        if [ $BACKEND_STATUS -eq 0 ]; then
+          echo "   等待后端服务完全启动..."
+          sleep 5
         fi
         
         if systemctl is-active --quiet minilpa-agent; then
@@ -297,7 +308,14 @@ jobs:
           AGENT_STATUS=0
         else
           echo "   ⚠️  代理服务启动失败"
-          echo "   查看日志: sudo journalctl -u minilpa-agent -n 50"
+          echo "   === 代理服务状态 ==="
+          systemctl status minilpa-agent --no-pager -l | head -20
+          echo ""
+          echo "   === 代理服务最近日志 ==="
+          journalctl -u minilpa-agent -n 30 --no-pager | tail -20
+          echo ""
+          echo "   === 检查后端是否可访问 ==="
+          curl -s http://127.0.0.1:8080/api/devices/status || echo "   后端API无法访问"
           AGENT_STATUS=1
         fi
         
@@ -397,6 +415,19 @@ jobs:
         port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
         script: |
           echo "=== 验证服务状态 ==="
-          systemctl status minilpa-backend --no-pager -l || true
-          systemctl status minilpa-agent --no-pager -l || true
+          echo ""
+          echo "1. 后端服务状态:"
+          systemctl status minilpa-backend --no-pager -l | head -15 || echo "后端服务未运行"
+          echo ""
+          echo "2. 代理服务状态:"
+          systemctl status minilpa-agent --no-pager -l | head -15 || echo "代理服务未运行"
+          echo ""
+          echo "3. 测试后端API连接:"
+          curl -s http://127.0.0.1:8080/api/devices/status || echo "后端API无法访问"
+          echo ""
+          echo "4. 检查端口监听:"
+          netstat -tlnp | grep 8080 || echo "8080端口未监听"
+          echo ""
+          echo "5. 代理服务最近日志:"
+          journalctl -u minilpa-agent -n 10 --no-pager | tail -10 || echo "无法获取代理日志"
 
