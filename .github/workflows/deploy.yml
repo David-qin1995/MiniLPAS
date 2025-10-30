@@ -30,7 +30,9 @@ jobs:
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        cache-dependency-path: web-frontend/package-lock.json
+        cache-dependency-path: |
+          web-frontend/package-lock.json
+          MiniLPAS/web-frontend/package-lock.json
     
     - name: 构建后端服务
       working-directory: ./web-backend
