@@ -15,7 +15,6 @@ import {
   InputAdornment,
 } from '@mui/material'
 import { Search, Settings, List as ListIcon, Notifications, Download, Memory } from '@mui/icons-material'
-import { useAppStore } from '../store/useAppStore'
 
 interface Command {
   id: string
@@ -29,7 +28,6 @@ interface Command {
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const { showToast } = useAppStore()
 
   const commands: Command[] = useMemo(
     () => [

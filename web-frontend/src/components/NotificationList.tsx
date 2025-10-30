@@ -15,7 +15,7 @@ import {
   Tooltip,
   CircularProgress
 } from '@mui/material'
-import { CheckCircle, Delete as DeleteIcon, SelectAll, InvertColorsOff } from '@mui/icons-material'
+import { CheckCircle, Delete as DeleteIcon, InvertColorsOff } from '@mui/icons-material'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { notificationApi } from '../utils/api'

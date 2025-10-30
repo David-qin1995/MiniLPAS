@@ -4,7 +4,7 @@ import { chipApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
 
 export default function ChipInfo() {
-  const { setLoading, showToast } = useAppStore()
+  const { setLoading } = useAppStore()
   const [chipInfo, setChipInfo] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
 

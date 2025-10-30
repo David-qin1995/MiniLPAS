@@ -6,7 +6,7 @@ import { deviceApi } from '../utils/api'
 // 暂时禁用 Socket.IO，使用轮询
 
 export default function DeviceStatus() {
-  const { connected, setConnected } = useAppStore()
+  const setConnected = useAppStore((s) => s.setConnected)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
   // const [socket, setSocket] = useState<Socket | null>(null)
 

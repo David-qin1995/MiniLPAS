@@ -1,4 +1,4 @@
-import { Dialog, DialogTitle, DialogContent, LinearProgress, Typography, Box, IconButton, Button } from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, LinearProgress, Typography, Box, IconButton } from '@mui/material'
 import { Close } from '@mui/icons-material'
 import { useAppStore } from '../store/useAppStore'
 
@@ -12,7 +12,7 @@ export interface ProgressInfo {
 
 export default function ProgressDialog() {
   const progress = useAppStore((state) => state.progress)
-  const hideProgress = useAppStore((state) => state.hideProgress)
+  // const hideProgress = useAppStore((state) => state.hideProgress)
   const cancelProgress = useAppStore((state) => state.cancelProgress)
 
   if (!progress) return null
