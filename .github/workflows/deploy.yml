@@ -31,7 +31,7 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
     
     - name: 构建后端服务
-      working-directory: ./web-backend
+      working-directory: ./MiniLPAS/web-backend
       run: |
         # 如果存在 gradlew，使用它；否则使用 java 直接运行 wrapper jar
         if [ -f "./gradlew" ]; then
@@ -43,7 +43,7 @@ jobs:
         fi
     
     - name: 构建本地代理
-      working-directory: ./local-agent
+      working-directory: ./MiniLPAS/local-agent
       run: |
         if [ -f "./gradlew" ]; then
           chmod +x ./gradlew
@@ -53,7 +53,7 @@ jobs:
         fi
     
     - name: 构建前端
-      working-directory: ./web-frontend
+      working-directory: ./MiniLPAS/web-frontend
       run: |
         npm ci
         npm run build
@@ -65,36 +65,36 @@ jobs:
         mkdir -p deploy-package/config
         
         # 复制后端JAR（过滤掉 plain jar）
-        cd web-backend/build/libs
+        cd MiniLPAS/web-backend/build/libs
         for jar in *.jar; do
           if [[ ! "$jar" == *"-plain.jar" ]]; then
-            cp "$jar" ../../../deploy-package/app/minilpa-backend.jar
+            cp "$jar" ../../../../deploy-package/app/minilpa-backend.jar
             echo "后端JAR: $jar"
             break
           fi
         done
-        cd ../../..
+        cd ../../../../..
         
         # 复制代理JAR（过滤掉 plain jar）
-        cd local-agent/build/libs
+        cd MiniLPAS/local-agent/build/libs
         for jar in *.jar; do
           if [[ ! "$jar" == *"-plain.jar" ]]; then
-            cp "$jar" ../../../deploy-package/app/minilpa-agent.jar
+            cp "$jar" ../../../../deploy-package/app/minilpa-agent.jar
             echo "代理JAR: $jar"
             break
           fi
         done
-        cd ../../..
+        cd ../../../../..
         
         # 复制前端文件
-        cp -r web-frontend/dist/* deploy-package/frontend/
+        cp -r MiniLPAS/web-frontend/dist/* deploy-package/frontend/
         
         # 复制配置文件
-        cp deploy/minilpa-backend.service deploy-package/config/
-        cp deploy/minilpa-agent.service deploy-package/config/
-        cp deploy/nginx.conf.example deploy-package/config/
-        cp deploy/update.sh deploy-package/config/
-        cp deploy/application-prod.yml deploy-package/config/application.yml
+        cp MiniLPAS/deploy/minilpa-backend.service deploy-package/config/
+        cp MiniLPAS/deploy/minilpa-agent.service deploy-package/config/
+        cp MiniLPAS/deploy/nginx.conf.example deploy-package/config/
+        cp MiniLPAS/deploy/update.sh deploy-package/config/
+        cp MiniLPAS/deploy/application-prod.yml deploy-package/config/application.yml
         
         # 创建部署脚本
         cat > deploy-package/deploy.sh << 'DEPLOYSCRIPT'
