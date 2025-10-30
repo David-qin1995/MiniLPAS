@@ -1,0 +1,122 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Info",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "reset": "Reset",
+    "search": "Search",
+    "refresh": "Refresh"
+  },
+  "nav": {
+    "home": "Home",
+    "profiles": "Profiles",
+    "download": "Download",
+    "notifications": "Notifications",
+    "chip": "Chip Info",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "Overview",
+    "deviceStatus": "Device Status",
+    "chipInfo": "Chip Information"
+  },
+  "profiles": {
+    "title": "Profile List",
+    "total": "Total {{count}}",
+    "noProfiles": "No profiles",
+    "noSearchResults": "No matching profiles found",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "deleteConfirm": "Are you sure you want to delete this profile? This action cannot be undone!",
+    "deleteSuccess": "Profile deleted",
+    "enableSuccess": "Profile enabled",
+    "disableSuccess": "Profile disabled",
+    "fetchError": "Failed to fetch profiles",
+    "enableError": "Failed to enable",
+    "disableError": "Failed to disable",
+    "deleteError": "Failed to delete",
+    "nicknameUpdated": "Nickname updated",
+    "updateError": "Update failed",
+    "editNickname": "Edit Nickname",
+    "nickname": "Nickname",
+    "iccid": "ICCID",
+    "serviceProvider": "Service Provider",
+    "profileName": "Profile Name"
+  },
+  "download": {
+    "title": "Download Profile",
+    "activationCode": "Activation Code",
+    "activationCodePlaceholder": "Enter activation code...",
+    "qrCode": "QR Code",
+    "uploadQrCode": "Upload QR Code Image",
+    "dragDropHint": "Or drag and drop QR code image here",
+    "download": "Download",
+    "downloading": "Downloading...",
+    "downloadSuccess": "Profile downloaded successfully",
+    "downloadError": "Download failed",
+    "invalidCode": "Invalid activation code",
+    "invalidQrCode": "Invalid QR code"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "noNotifications": "No notifications",
+    "markAllRead": "Mark All as Read",
+    "clearAll": "Clear All",
+    "timeAgo": "{{time}} ago"
+  },
+  "chip": {
+    "title": "Chip Information",
+    "eid": "EID",
+    "iccid": "ICCID",
+    "profileCount": "Profile Count",
+    "unknown": "Unknown",
+    "devMode": "Development Mode",
+    "devModeHint": "No smart card reader detected in local development environment",
+    "devModeHint2": "Connect a reader in production environment to use normally",
+    "fetchError": "Failed to fetch chip information"
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "darkTheme": "Dark Theme",
+    "language": "Language",
+    "chinese": "Chinese (Simplified)",
+    "english": "English",
+    "other": "Other",
+    "resetSettings": "Reset All Settings",
+    "resetConfirm": "Are you sure you want to reset all settings?",
+    "resetSuccess": "Settings reset"
+  },
+  "device": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connecting": "Connecting...",
+    "connectionError": "Connection failed",
+    "startAgentHint": "Please start the local agent service first"
+  },
+  "commandPalette": {
+    "placeholder": "Search commands, pages or settings...",
+    "noResults": "No matching commands found",
+    "pressEsc": "Press ESC to close"
+  },
+  "error": {
+    "title": "Error",
+    "message": "The application encountered an error. Please try refreshing the page or contact support.",
+    "reload": "Reload",
+    "goHome": "Go Home"
+  },
+  "progress": {
+    "title": "Operation in Progress",
+    "cancellable": "Cancellable"
+  }
+}
+

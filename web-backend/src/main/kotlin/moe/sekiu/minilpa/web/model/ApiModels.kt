@@ -1,6 +1,8 @@
 package moe.sekiu.minilpa.web.model
 
 import kotlinx.serialization.Serializable
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 
 // 通用响应
 @Serializable
@@ -8,7 +10,8 @@ data class ApiResponse<T>(
     val success: Boolean,
     val data: T? = null,
     val message: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val code: String? = null
 )
 
 // 设备信息
@@ -50,7 +53,10 @@ data class Notification(
 // 下载配置请求
 @Serializable
 data class DownloadProfileRequest(
+    @field:NotBlank(message = "smdp 不能为空")
     val smdp: String,
+    @field:NotBlank(message = "matchingId 不能为空")
+    @field:Size(min = 6, max = 128, message = "matchingId 长度不合法")
     val matchingId: String,
     val confirmationCode: String? = null,
     val confirmCode: String? = null, // 兼容字段

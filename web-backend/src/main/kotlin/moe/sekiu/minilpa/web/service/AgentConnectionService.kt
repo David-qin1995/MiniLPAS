@@ -1,12 +1,18 @@
 package moe.sekiu.minilpa.web.service
 
 import moe.sekiu.minilpa.web.model.WebSocketMessage
+import moe.sekiu.minilpa.web.config.BackendProperties
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 
 @Service
-class AgentConnectionService {
+class AgentConnectionService(
+    private val backendProperties: BackendProperties,
+    private val meterRegistry: MeterRegistry
+) {
     private val connectedAgents = ConcurrentHashMap<String, AgentSession>()
 
     data class AgentSession(
@@ -30,10 +36,20 @@ class AgentConnectionService {
     }
 
     private val webSocketSessions = ConcurrentHashMap<String, Any>() // WebSocketSession
+    private val clientWebSocketSessions = ConcurrentHashMap<String, org.springframework.web.socket.WebSocketSession>()
     private val log = org.slf4j.LoggerFactory.getLogger(javaClass)
+    private val agentLocks = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
     
     fun registerWebSocketSession(sessionId: String, session: Any) {
         webSocketSessions[sessionId] = session
+    }
+
+    fun registerClientSession(sessionId: String, session: org.springframework.web.socket.WebSocketSession) {
+        clientWebSocketSessions[sessionId] = session
+    }
+
+    fun unregisterClientSession(sessionId: String) {
+        clientWebSocketSessions.remove(sessionId)
     }
     
     fun sendCommand(agentId: String, command: WebSocketMessage.Command): Boolean {
@@ -84,6 +100,39 @@ class AgentConnectionService {
             pendingRequests.remove(requestId)
         }
     }
+
+    fun sendCommandAndWaitWithRetry(
+        sessionId: String,
+        command: Map<String, Any>,
+        timeoutMillis: Long = backendProperties.command.timeoutMs,
+        retries: Int = backendProperties.command.retries
+    ): Map<String, Any>? {
+        val type = command["type"]?.toString() ?: "unknown"
+        val timer = Timer.builder("minilpa.command.duration")
+            .tag("type", type)
+            .register(meterRegistry)
+        return moe.sekiu.minilpa.web.util.RetryUtils.retry(times = retries + 1) {
+            val success = BooleanArray(1)
+            val result = timer.recordCallable {
+                val res = sendCommandAndWait(sessionId, command, timeoutMillis)
+                success[0] = (res?.get("success") == true)
+                res
+            }
+            log.info("command_executed type={} success={}", type, success[0])
+            if (result == null) throw RuntimeException("command timeout or failed")
+            result
+        }
+    }
+
+    fun <T> withAgentExclusive(agentSessionId: String, block: () -> T): T {
+        val sem = agentLocks.computeIfAbsent(agentSessionId) { java.util.concurrent.Semaphore(1) }
+        sem.acquire()
+        return try {
+            block()
+        } finally {
+            sem.release()
+        }
+    }
     
     fun handleAgentResponse(sessionId: String, response: Map<String, Any>) {
         val requestId = response["requestId"] as? String
@@ -100,10 +149,15 @@ class AgentConnectionService {
     }
 
     fun broadcastToClients(topic: String, message: Any) {
-        // 暂时不使用STOMP，直接通过WebSocket发送
-        // messagingTemplate.convertAndSend("/topic/$topic", message)
-        // TODO: 实现前端WebSocket广播（当需要时）
-        log.info("广播消息到主题: $topic")
+        try {
+            val objectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+            val text = objectMapper.writeValueAsString(mapOf("topic" to topic, "data" to message))
+            clientWebSocketSessions.values.forEach { session ->
+                if (session.isOpen) session.sendMessage(org.springframework.web.socket.TextMessage(text))
+            }
+        } catch (e: Exception) {
+            log.error("广播消息失败", e)
+        }
     }
 
     fun getConnectedAgents(): Map<String, AgentSession> {
@@ -126,6 +180,13 @@ class AgentConnectionService {
             "type" to "disconnected",
             "agentId" to agentId
         ))
+    }
+
+    fun resolveSessionIdByAgentIdOrFirst(agentId: String?): String? {
+        if (connectedAgents.isEmpty()) return null
+        if (agentId.isNullOrBlank()) return connectedAgents.values.firstOrNull()?.id
+        val session = connectedAgents[agentId]
+        return session?.id ?: connectedAgents.values.firstOrNull()?.id
     }
 }
 

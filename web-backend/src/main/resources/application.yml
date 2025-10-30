@@ -26,3 +26,27 @@ logging:
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+minilpa:
+  command:
+    timeout-ms: 30000
+    download-timeout-ms: 120000
+    retries: 2
+  cache:
+    profiles-ttl-ms: 2000
+    notifications-ttl-ms: 2000
+    chip-info-ttl-ms: 5000
+

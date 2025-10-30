@@ -27,6 +27,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect")

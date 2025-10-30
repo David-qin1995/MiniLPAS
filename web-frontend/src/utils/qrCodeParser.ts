@@ -1,5 +1,5 @@
 // QR码解析工具
-// 注意：需要在浏览器环境中使用jsQR库
+import jsQR from 'jsqr'
 
 export interface ActivationCode {
   smdp: string
@@ -45,16 +45,12 @@ export async function parseQRCodeFromImage(imageUrl: string): Promise<Activation
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       
-      // 动态导入jsQR（如果可用）
-      // @ts-ignore
-      if (typeof window !== 'undefined' && window.jsQR) {
-        // @ts-ignore
-        const code = window.jsQR(imageData.data, imageData.width, imageData.height)
-        if (code) {
-          const parsed = parseActivationCode(code.data)
-          resolve(parsed)
-          return
-        }
+      // 使用jsQR解析二维码
+      const code = jsQR(imageData.data, imageData.width, imageData.height)
+      if (code) {
+        const parsed = parseActivationCode(code.data)
+        resolve(parsed)
+        return
       }
       
       resolve(null)

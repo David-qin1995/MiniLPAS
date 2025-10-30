@@ -14,7 +14,7 @@ import okhttp3.WebSocketListener
 import java.io.File
 
 class LocalAgent(
-    private val serverUrl: String = "ws://localhost:8080/ws/agent"
+    private val serverUrl: String = System.getenv("MINILPA_SERVER_WS_URL") ?: "ws://localhost:8080/ws/agent"
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private var webSocket: Any? = null  // 使用 OkHttp WebSocket
@@ -123,13 +123,21 @@ class LocalAgent(
     
     private suspend fun handleGetChipInfo() {
         try {
-            val executor = lpacExecutor ?: throw IllegalStateException("LPACExecutor未初始化")
+            val executor = lpacExecutor ?: throw IllegalStateException("LPAC未配置，请检查LPAC可执行文件是否存在")
             val chipInfo = executor.getChipInfo()
             val chipInfoJson = Json.encodeToString(moe.sekiu.minilpa.agent.model.ChipInfo.serializer(), chipInfo)
             sendResponse(true, chipInfoJson, null, currentRequestId)
         } catch (e: Exception) {
             log.error("获取芯片信息失败", e)
-            sendResponse(false, null, e.message ?: "获取芯片信息失败", currentRequestId)
+            val errorMsg = when {
+                e.message?.contains("not found") == true -> "LPAC可执行文件未找到，请下载并放置到正确位置"
+                e.message?.contains("未初始化") == true -> "LPAC未配置，无法执行eSIM操作"
+                e.message?.contains("SCardEstablishContext") == true -> "PCSC服务未运行或未检测到智能卡读卡器，请确保：1) PCSC服务正在运行 2) 已连接智能卡读卡器"
+                e.message?.contains("APDU driver") == true -> "智能卡驱动初始化失败，请检查读卡器连接和驱动"
+                e.message?.contains("退出码") == true -> "LPAC执行失败，可能未连接eSIM设备或读卡器"
+                else -> e.message ?: "获取芯片信息失败"
+            }
+            sendResponse(false, null, errorMsg, currentRequestId)
         }
     }
     

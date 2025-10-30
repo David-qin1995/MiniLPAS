@@ -2,31 +2,42 @@ package moe.sekiu.minilpa.web.controller
 
 import moe.sekiu.minilpa.web.model.*
 import moe.sekiu.minilpa.web.service.AgentConnectionService
+import moe.sekiu.minilpa.web.service.CacheService
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import org.springframework.validation.annotation.Validated
+import jakarta.validation.Valid
+import moe.sekiu.minilpa.web.util.Validators
 
 @RestController
 @RequestMapping("/api/profiles")
+@Validated
 class ProfileController(
-    private val agentConnectionService: AgentConnectionService
+    private val agentConnectionService: AgentConnectionService,
+    private val cacheService: CacheService
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @GetMapping
     fun getProfiles(@RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<List<Profile>>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(
                 success = false,
                 error = "没有已连接的代理"
             ))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
+        val cacheKey = "profiles:$sessionId"
+        cacheService.get<List<Profile>>(cacheKey)?.let {
+            return ResponseEntity.ok(ApiResponse(success = true, data = it))
+        }
+
         val command = mapOf("type" to "get-profiles")
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+        val response = agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30000, 2)
+
         return if (response != null && response["success"] == true) {
             try {
                 val dataStr = response["data"] as? String
@@ -43,7 +54,7 @@ class ProfileController(
                             nickname = profileData["profileNickname"] as? String
                         )
                     }
-                    
+                    cacheService.put(cacheKey, profiles, 2_000)
                     ResponseEntity.ok(ApiResponse(success = true, data = profiles))
                 } else {
                     ResponseEntity.ok(ApiResponse(success = true, data = emptyList()))
@@ -58,15 +69,17 @@ class ProfileController(
     }
 
     @PostMapping("/download")
-    fun downloadProfile(@RequestBody request: DownloadProfileRequest): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+    fun downloadProfile(@RequestBody @Valid request: DownloadProfileRequest, @RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<Unit>> {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
+        if (request.smdp.isBlank() || request.matchingId.isBlank()) {
+            throw IllegalArgumentException("smdp 与 matchingId 不能为空")
+        }
+        Validators.requireValidSmdp(request.smdp)
+
         val command = mapOf(
             "type" to "download-profile",
             "payload" to mapOf(
@@ -76,9 +89,12 @@ class ProfileController(
                 "imei" to request.imei
             )
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command, 60000) // 下载可能需要更长时间
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("profiles:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 120_000, 1)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {
@@ -88,22 +104,23 @@ class ProfileController(
     }
 
     @PostMapping("/{iccid}/enable")
-    fun enableProfile(@PathVariable iccid: String): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+    fun enableProfile(@PathVariable iccid: String, @RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<Unit>> {
+        Validators.requireValidIccid(iccid)
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
         val command = mapOf(
             "type" to "enable-profile",
             "iccid" to iccid
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("profiles:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 2)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {
@@ -113,22 +130,23 @@ class ProfileController(
     }
 
     @PostMapping("/{iccid}/disable")
-    fun disableProfile(@PathVariable iccid: String): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+    fun disableProfile(@PathVariable iccid: String, @RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<Unit>> {
+        Validators.requireValidIccid(iccid)
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
         val command = mapOf(
             "type" to "disable-profile",
             "iccid" to iccid
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("profiles:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 2)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {
@@ -138,22 +156,23 @@ class ProfileController(
     }
 
     @DeleteMapping("/{iccid}")
-    fun deleteProfile(@PathVariable iccid: String): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+    fun deleteProfile(@PathVariable iccid: String, @RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<Unit>> {
+        Validators.requireValidIccid(iccid)
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
         val command = mapOf(
             "type" to "delete-profile",
             "iccid" to iccid
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("profiles:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 2)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {
@@ -165,24 +184,28 @@ class ProfileController(
     @PutMapping("/{iccid}/nickname")
     fun setNickname(
         @PathVariable iccid: String,
-        @RequestBody nickname: Map<String, String>
+        @RequestBody nickname: Map<String, String>,
+        @RequestParam(required = false) agentId: String?
     ): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
         
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+        val value = nickname["nickname"]?.trim().orEmpty()
+        if (value.isBlank()) throw IllegalArgumentException("nickname 不能为空")
+
         val command = mapOf(
             "type" to "set-profile-nickname",
             "iccid" to iccid,
-            "nickname" to (nickname["nickname"] ?: "")
+            "nickname" to value
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("profiles:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 1)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {

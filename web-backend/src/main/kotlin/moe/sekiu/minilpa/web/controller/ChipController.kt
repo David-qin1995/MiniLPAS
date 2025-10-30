@@ -3,34 +3,40 @@ package moe.sekiu.minilpa.web.controller
 import moe.sekiu.minilpa.web.model.ApiResponse
 import moe.sekiu.minilpa.web.model.ChipInfo
 import moe.sekiu.minilpa.web.service.AgentConnectionService
+import moe.sekiu.minilpa.web.service.CacheService
 import org.springframework.http.ResponseEntity
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/chip")
+@Validated
 class ChipController(
-    private val agentConnectionService: AgentConnectionService
+    private val agentConnectionService: AgentConnectionService,
+    private val cacheService: CacheService
 ) {
 
     @GetMapping("/info")
     fun getChipInfo(@RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<ChipInfo>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(
                 success = false,
                 error = "没有已连接的代理"
             ))
         }
         
-        // 使用第一个连接的代理
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
         
+        val cacheKey = "chipinfo:$sessionId"
+        cacheService.get<ChipInfo>(cacheKey)?.let {
+            return ResponseEntity.ok(ApiResponse(success = true, data = it))
+        }
+
         val command = mapOf(
             "type" to "get-chip-info"
         )
         
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
+        val response = agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 2)
         
         return if (response != null && response["success"] == true) {
             try {
@@ -49,7 +55,7 @@ class ChipController(
                         iccid = null, // LPAC可能返回在不同字段
                         defaultSmdp = defaultDpAddress
                     )
-                    
+                    cacheService.put(cacheKey, chipInfo, 5_000)
                     ResponseEntity.ok(ApiResponse(success = true, data = chipInfo))
                 } else {
                     ResponseEntity.ok(ApiResponse(success = false, error = "响应数据为空"))

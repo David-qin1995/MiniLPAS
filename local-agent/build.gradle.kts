@@ -45,6 +45,20 @@ application {
     mainClass.set("moe.sekiu.minilpa.agent.LocalAgentKt")
 }
 
+tasks.jar {
+    manifest {
+        attributes(
+            "Main-Class" to "moe.sekiu.minilpa.agent.LocalAgentKt",
+            "Implementation-Version" to version
+        )
+    }
+    // 包含所有依赖的类文件（用于简单的可执行JAR）
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         jvmTarget = "21"

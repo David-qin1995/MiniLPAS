@@ -156,7 +156,14 @@ class LPACExecutor(
             }
             
             val payload = lpacout?.payload
-                ?: throw RuntimeException("LPAC output not captured")
+            
+            if (payload == null) {
+                // LPAC执行失败，可能的原因：
+                // 1. PCSC服务未运行或未检测到读卡器
+                // 2. LPAC输出格式不符合预期
+                // 3. 硬件错误
+                throw RuntimeException("LPAC执行失败：未收到有效输出。可能原因：1) 未检测到智能卡读卡器 2) PCSC服务未运行 3) eSIM设备未连接。错误信息：请查看LPAC的stderr输出")
+            }
             
             if (payload is LPACIO.Payload.LPA) {
                 payload.assertSuccess()

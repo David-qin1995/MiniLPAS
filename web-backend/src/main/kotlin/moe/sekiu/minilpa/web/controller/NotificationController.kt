@@ -2,31 +2,37 @@ package moe.sekiu.minilpa.web.controller
 
 import moe.sekiu.minilpa.web.model.*
 import moe.sekiu.minilpa.web.service.AgentConnectionService
+import moe.sekiu.minilpa.web.service.CacheService
 import org.springframework.http.ResponseEntity
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/notifications")
+@Validated
 class NotificationController(
-    private val agentConnectionService: AgentConnectionService
+    private val agentConnectionService: AgentConnectionService,
+    private val cacheService: CacheService
 ) {
     
     @GetMapping
     fun getNotifications(@RequestParam(required = false) agentId: String?): ResponseEntity<ApiResponse<List<Notification>>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(agentId)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(
                 success = false,
                 error = "没有已连接的代理"
             ))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
+
+        val cacheKey = "notifications:$sessionId"
+        cacheService.get<List<Notification>>(cacheKey)?.let {
+            return ResponseEntity.ok(ApiResponse(success = true, data = it))
+        }
         
         val command = mapOf("type" to "get-notifications")
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+        val response = agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 2)
+
         return if (response != null && response["success"] == true) {
             try {
                 val dataStr = response["data"] as? String
@@ -42,7 +48,7 @@ class NotificationController(
                             notificationAddress = notifData["notificationAddress"] as? String
                         )
                     }
-                    
+                    cacheService.put(cacheKey, notifications, 2_000)
                     ResponseEntity.ok(ApiResponse(success = true, data = notifications))
                 } else {
                     ResponseEntity.ok(ApiResponse(success = true, data = emptyList()))
@@ -60,17 +66,15 @@ class NotificationController(
     fun processNotification(
         @RequestBody request: Map<String, Any>
     ): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(null)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
         val seq = request["seq"] as? List<Int> ?: emptyList()
         val remove = request["remove"] as? Boolean ?: false
-        
+        if (seq.isEmpty()) throw IllegalArgumentException("seq 不能为空")
+
         val command = mapOf(
             "type" to "process-notification",
             "payload" to mapOf(
@@ -78,9 +82,12 @@ class NotificationController(
                 "remove" to remove
             )
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("notifications:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 1)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {
@@ -91,25 +98,26 @@ class NotificationController(
     
     @DeleteMapping
     fun removeNotification(@RequestBody request: Map<String, List<Int>>): ResponseEntity<ApiResponse<Unit>> {
-        val agents = agentConnectionService.getConnectedAgents()
-        if (agents.isEmpty()) {
+        val sessionId = agentConnectionService.resolveSessionIdByAgentIdOrFirst(null)
+        if (sessionId == null) {
             return ResponseEntity.ok(ApiResponse(success = false, error = "没有已连接的代理"))
         }
-        
-        val firstAgent = agents.values.first()
-        val sessionId = firstAgent.id
-        
+
         val seq = request["seq"] ?: emptyList()
-        
+        if (seq.isEmpty()) throw IllegalArgumentException("seq 不能为空")
+
         val command = mapOf(
             "type" to "remove-notification",
             "payload" to mapOf(
                 "seq" to seq
             )
         )
-        
-        val response = agentConnectionService.sendCommandAndWait(sessionId, command)
-        
+
+        val response = agentConnectionService.withAgentExclusive(sessionId) {
+            cacheService.invalidate("notifications:$sessionId")
+            agentConnectionService.sendCommandAndWaitWithRetry(sessionId, command, 30_000, 1)
+        }
+
         return if (response != null && response["success"] == true) {
             ResponseEntity.ok(ApiResponse(success = true, message = response["data"] as? String))
         } else {

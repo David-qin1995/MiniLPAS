@@ -1,0 +1,98 @@
+name: Agent CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'local-agent/**'
+      - 'deploy/agent.Dockerfile'
+      - 'deploy/entrypoint-agent.sh'
+      - '.github/workflows/agent-ci-cd.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/minilpa-agent
+
+jobs:
+  build-and-push:
+    name: Build and Push Agent Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/agent.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: Deploy to Baota Server (SSH)
+    needs: build-and-push
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare image ref
+        id: img
+        run: |
+          echo "ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="/www/wwwroot/minilpa/agent"
+            mkdir -p "$DEPLOY_DIR"
+            cat > "$DEPLOY_DIR/docker-compose.yml" <<'EOF'
+            version: "3.8"
+            services:
+              minilpa-agent:
+                image: ${IMAGE}
+                container_name: minilpa-agent
+                restart: unless-stopped
+                environment:
+                  - MINILPA_SERVER_WS_URL=${WS_URL}
+                # 如需USB读卡器直通，取消以下注释
+                # privileged: true
+                # devices:
+                #   - "/dev/bus/usb:/dev/bus/usb"
+                # network_mode: host
+            EOF
+            IMAGE='${{ steps.img.outputs.ref }}' WS_URL='${{ secrets.MINILPA_SERVER_WS_URL }}' envsubst < "$DEPLOY_DIR/docker-compose.yml" > "$DEPLOY_DIR/docker-compose.rendered.yml"
+            mv "$DEPLOY_DIR/docker-compose.rendered.yml" "$DEPLOY_DIR/docker-compose.yml"
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d
+

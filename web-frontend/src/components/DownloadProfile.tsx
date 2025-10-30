@@ -1,83 +1,87 @@
-import { Paper, Typography, TextField, Button, Box, Alert } from '@mui/material'
-import { useState } from 'react'
-import { Upload } from '@mui/icons-material'
+import { 
+  Paper, 
+  Typography, 
+  TextField, 
+  Button, 
+  Box, 
+  Alert,
+  CircularProgress,
+  Card,
+  CardContent
+} from '@mui/material'
+import { useState, useCallback, DragEvent } from 'react'
+import { Upload, CloudUpload } from '@mui/icons-material'
 import { parseActivationCode, parseQRCodeFromImage } from '../utils/qrCodeParser'
+import { profileApi } from '../utils/api'
+import { useAppStore } from '../store/useAppStore'
 
 export default function DownloadProfile() {
+  const { setLoading, showToast } = useAppStore()
   const [smdp, setSmdp] = useState('')
   const [matchingId, setMatchingId] = useState('')
   const [confirmCode, setConfirmCode] = useState('')
   const [imei, setImei] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [loading, setLocalLoading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!smdp || !matchingId) {
-      setMessage({ type: 'error', text: 'SMDP和MatchingID是必填项' })
+      showToast('SMDP和MatchingID是必填项', 'error')
       return
     }
 
-    setLoading(true)
-    setMessage(null)
-
-    fetch('http://localhost:8080/api/profiles/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    setLocalLoading(true)
+    setLoading('download', true)
+    
+    try {
+      await profileApi.downloadProfile({
         smdp,
         matchingId,
-        confirmCode: confirmCode || null,
-        imei: imei || null
+        confirmCode: confirmCode || undefined,
+        imei: imei || undefined,
       })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setMessage({ type: 'success', text: data.message || '下载已启动' })
-          // 清空表单
-          setSmdp('')
-          setMatchingId('')
-          setConfirmCode('')
-          setImei('')
-        } else {
-          setMessage({ type: 'error', text: data.error || '下载失败' })
-        }
-      })
-      .catch(err => {
-        setMessage({ type: 'error', text: '下载失败: ' + err.message })
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+      
+      showToast('下载已启动', 'success')
+      // 清空表单
+      setSmdp('')
+      setMatchingId('')
+      setConfirmCode('')
+      setImei('')
+    } catch (error: any) {
+      showToast(error.message || '下载失败', 'error')
+    } finally {
+      setLocalLoading(false)
+      setLoading('download', false)
+    }
   }
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // 如果是图片，尝试解析QR码
+  const handleFileUpload = async (file: File) => {
     if (file.type.startsWith('image/')) {
+      // 图片文件，尝试解析QR码
       const reader = new FileReader()
       reader.onload = async (e) => {
         const dataUrl = e.target?.result as string
-        const result = await parseQRCodeFromImage(dataUrl)
-        if (result) {
-          setSmdp(result.smdp)
-          setMatchingId(result.matchingId)
-          if (result.reqConCode) {
-            // 需要确认码，清空并提示用户输入
-            setConfirmCode('')
-            setMessage({ type: 'success', text: 'QR码解析成功，请输入确认码' })
+        try {
+          const result = await parseQRCodeFromImage(dataUrl)
+          if (result) {
+            setSmdp(result.smdp)
+            setMatchingId(result.matchingId)
+            if (result.reqConCode) {
+              setConfirmCode('')
+              showToast('QR码解析成功，请输入确认码', 'success')
+            } else {
+              showToast('QR码解析成功', 'success')
+            }
           } else {
-            setMessage({ type: 'success', text: 'QR码解析成功' })
+            showToast('无法从图片中解析QR码', 'error')
           }
-        } else {
-          setMessage({ type: 'error', text: '无法从图片中解析QR码，请确保图片包含有效的激活码QR码' })
+        } catch (error) {
+          showToast('QR码解析失败', 'error')
         }
       }
       reader.readAsDataURL(file)
     } else {
-      // 文本文件，读取内容
+      // 文本文件
       const reader = new FileReader()
       reader.onload = (e) => {
         const text = e.target?.result as string
@@ -94,15 +98,34 @@ export default function DownloadProfile() {
       setMatchingId(parsed.matchingId)
       if (parsed.reqConCode) {
         setConfirmCode('')
-        setMessage({ type: 'success', text: '激活码解析成功，请输入确认码' })
+        showToast('激活码解析成功，请输入确认码', 'success')
       } else {
-        setConfirmCode('')
-        setMessage({ type: 'success', text: '激活码解析成功' })
+        showToast('激活码解析成功', 'success')
       }
     } else {
-      setMessage({ type: 'error', text: '无法解析激活码格式，请确保格式为 LPA:1$...$...' })
+      showToast('无法解析激活码格式', 'error')
     }
   }
+
+  const handleDrag = useCallback((e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true)
+    } else if (e.type === 'dragleave') {
+      setDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0])
+    }
+  }, [])
 
   const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
     const text = event.clipboardData.getData('text')
@@ -113,17 +136,56 @@ export default function DownloadProfile() {
   }
 
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper elevation={0}>
       <Typography variant="h6" gutterBottom>
         下载配置文件
       </Typography>
 
-      {message && (
-        <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-          {message.text}
-        </Alert>
-      )}
+      {/* 拖拽上传区域 */}
+      <Card 
+        elevation={0}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+        sx={{
+          mb: 3,
+          border: '2px dashed',
+          borderColor: dragActive ? 'primary.main' : 'divider',
+          backgroundColor: dragActive ? 'action.hover' : 'background.paper',
+          transition: 'all 0.2s ease',
+          cursor: 'pointer',
+        }}
+      >
+        <CardContent sx={{ textAlign: 'center', py: 4 }}>
+          <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            拖拽文件到此处或点击上传
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            支持 QR 码图片、激活码文本文件
+          </Typography>
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<Upload />}
+            sx={{ mt: 2 }}
+          >
+            选择文件
+            <input
+              type="file"
+              hidden
+              accept="image/*,.txt"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleFileUpload(file)
+              }}
+            />
+          </Button>
+        </CardContent>
+      </Card>
 
+      {/* 表单 */}
       <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
           label="SMDP地址"
@@ -132,6 +194,7 @@ export default function DownloadProfile() {
           fullWidth
           required
           placeholder="例如: https://smdp.example.com"
+          onPaste={handlePaste}
         />
         
         <TextField
@@ -140,6 +203,7 @@ export default function DownloadProfile() {
           onChange={(e) => setMatchingId(e.target.value)}
           fullWidth
           required
+          onPaste={handlePaste}
         />
         
         <TextField
@@ -156,43 +220,13 @@ export default function DownloadProfile() {
           fullWidth
         />
 
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<Upload />}
-          >
-            上传QR码/激活码文件
-            <input
-              type="file"
-              hidden
-              accept="image/*,.txt"
-              onChange={handleFileUpload}
-            />
-          </Button>
-          
-          <Box 
-            sx={{ 
-              flex: 1, 
-              border: '1px dashed #ccc', 
-              borderRadius: 1, 
-              p: 2, 
-              textAlign: 'center',
-              cursor: 'pointer'
-            }}
-            onPaste={handlePaste}
-          >
-            <Typography variant="body2" color="text.secondary">
-              或在此区域粘贴激活码 (Ctrl+V)
-            </Typography>
-          </Box>
-        </Box>
-
         <Button
           variant="contained"
           onClick={handleDownload}
           disabled={loading || !smdp || !matchingId}
           size="large"
+          startIcon={loading ? <CircularProgress size={20} /> : undefined}
+          sx={{ mt: 2 }}
         >
           {loading ? '下载中...' : '开始下载'}
         </Button>
@@ -200,4 +234,3 @@ export default function DownloadProfile() {
     </Paper>
   )
 }
-
