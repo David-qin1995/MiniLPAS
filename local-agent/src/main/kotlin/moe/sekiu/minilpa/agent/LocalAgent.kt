@@ -47,6 +47,7 @@ class LocalAgent(
                 val client = OkHttpClient.Builder()
                     .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                     .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
                 val request = Request.Builder().url(serverUrl).build()
                 val listener = AgentWebSocketListener(this@LocalAgent)
