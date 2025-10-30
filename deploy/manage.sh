@@ -453,7 +453,81 @@ check_ports() {
 }
 
 # 主函数
+interactive_menu() {
+    while true; do
+        echo -e "${BLUE}==== MiniLPA 管理菜单 ====${NC}"
+        echo "1) 查看状态"
+        echo "2) 启动服务"
+        echo "3) 停止服务"
+        echo "4) 重启服务"
+        echo "5) 查看日志"
+        echo "6) 跟随实时日志"
+        echo "7) 健康检查"
+        echo "8) 查看端口"
+        echo "9) 退出"
+        echo ""
+        read -rp "请选择操作 [1-9]: " op
+
+        case "$op" in
+            1) action="status" ;;
+            2) action="start" ;;
+            3) action="stop" ;;
+            4) action="restart" ;;
+            5) action="logs" ;;
+            6) action="logs-follow" ;;
+            7) action="health" ;;
+            8) action="ports" ;;
+            9) echo "已退出"; exit 0 ;;
+            *) echo -e "${YELLOW}无效选择${NC}"; continue ;;
+        esac
+
+        if [ "$action" = "health" ] || [ "$action" = "ports" ]; then
+            : # 不需要选择具体服务
+        else
+            echo ""
+            echo "服务: 1) backend  2) agent  3) all"
+            read -rp "请选择服务 [1-3]: " svc_sel
+            case "$svc_sel" in
+                1) target="backend" ;;
+                2) target="agent" ;;
+                3) target="all" ;;
+                *) echo -e "${YELLOW}无效服务${NC}"; continue ;;
+            esac
+        fi
+
+        echo ""
+        case "$action" in
+            status)
+                if [ "$target" = "all" ]; then show_status; else show_status "$(get_service_name "$target")"; fi ;;
+            start)
+                if [ "$target" = "all" ]; then start_service; else start_service "$(get_service_name "$target")"; fi ;;
+            stop)
+                if [ "$target" = "all" ]; then stop_service; else stop_service "$(get_service_name "$target")"; fi ;;
+            restart)
+                if [ "$target" = "all" ]; then restart_service; else restart_service "$(get_service_name "$target")"; fi ;;
+            logs)
+                if [ -z "$target" ]; then echo -e "${YELLOW}未选择服务${NC}"; else show_logs "$target" 100; fi ;;
+            logs-follow)
+                if [ -z "$target" ]; then echo -e "${YELLOW}未选择服务${NC}"; else show_logs_follow "$target"; fi ;;
+            health)
+                check_health ;;
+            ports)
+                check_ports ;;
+        esac
+
+        echo ""
+        read -rp "按回车返回菜单..." _
+        clear
+    done
+}
+
 main() {
+    if [ -t 0 ] && [ -z "$1" ]; then
+        clear
+        interactive_menu
+        exit 0
+    fi
+
     local command="${1:-status}"
     local service="${2:-all}"
 
