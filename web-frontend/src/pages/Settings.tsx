@@ -20,7 +20,8 @@ import { useThemeContext } from '../contexts/ThemeContext'
 import { useAppStore } from '../store/useAppStore'
 
 export default function Settings() {
-  const { toggleTheme, theme } = useThemeContext()
+  const { toggleTheme } = useThemeContext()
+  const theme = useAppStore((state) => state.theme)
   const { showToast } = useAppStore()
   const [language, setLanguage] = useState('zh-CN')
 

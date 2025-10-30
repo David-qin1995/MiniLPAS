@@ -1,5 +1,4 @@
 import { AxiosError } from 'axios'
-import { useAppStore } from '../store/useAppStore'
 
 export interface ApiError {
   message: string
@@ -14,7 +13,7 @@ export function handleApiError(error: unknown): ApiError {
     const message = error.response?.data?.message || error.response?.data?.error || error.message || '请求失败'
     
     // 根据HTTP状态码判断是否可重试
-    const retryable = status && (status === 408 || status === 429 || status >= 500)
+    const retryable = Boolean(status && (status === 408 || status === 429 || status >= 500))
     
     return {
       message,

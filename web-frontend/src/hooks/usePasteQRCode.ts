@@ -29,7 +29,7 @@ export function usePasteQRCode(onPaste?: (result: PasteResult) => void) {
           if (!file) continue
 
           const reader = new FileReader()
-          reader.onload = async (e) => {
+          reader.onload = async () => {
             const dataUrl = reader.result as string
             try {
               const result = await parseQRCodeFromImage(dataUrl)

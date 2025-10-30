@@ -12,11 +12,11 @@ export default function Toast() {
       onClose={hideToast}
       anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
     >
-      {toast && (
+      {toast ? (
         <Alert onClose={hideToast} severity={toast.severity as AlertColor} sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
-      )}
+      ) : undefined}
     </Snackbar>
   )
 }
