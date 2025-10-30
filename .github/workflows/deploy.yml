@@ -165,6 +165,7 @@ jobs:
           cp "$DEPLOY_DIR/minilpa-agent.service" deploy-package/config/ 2>/dev/null || true
           cp "$DEPLOY_DIR/nginx.conf.example" deploy-package/config/ 2>/dev/null || true
           cp "$DEPLOY_DIR/update.sh" deploy-package/config/ 2>/dev/null || true
+          cp "$DEPLOY_DIR/manage.sh" deploy-package/config/ 2>/dev/null || true
           cp "$DEPLOY_DIR/application-prod.yml" deploy-package/config/application.yml 2>/dev/null || true
           echo "配置文件已复制"
         fi
@@ -255,6 +256,13 @@ jobs:
         # 复制配置文件（可选，不覆盖现有配置）
         if [ -d "config" ]; then
           cp -r config/* "$INSTALL_DIR/config/" 2>/dev/null || true
+        fi
+        
+        # 复制管理脚本到安装目录
+        if [ -f "config/manage.sh" ]; then
+          cp config/manage.sh "$INSTALL_DIR/manage.sh"
+          chmod +x "$INSTALL_DIR/manage.sh"
+          echo "   ✅ 管理脚本已更新"
         fi
         
         # 4. 设置权限
