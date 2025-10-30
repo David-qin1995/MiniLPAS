@@ -300,14 +300,15 @@ jobs:
     
     - name: 部署到宝塔服务器
       uses: appleboy/scp-action@v0.1.7
-      with:
+      config:
         host: ${{ secrets.BAOTA_HOST }}
         username: ${{ secrets.BAOTA_USER }}
         key: ${{ secrets.BAOTA_SSH_KEY }}
         port: ${{ secrets.BAOTA_SSH_PORT || 22 }}
         source: "deploy-package.tar.gz"
         target: "/tmp"
-        strip_components: 1
+        strip_components: 0
+      continue-on-error: false
     
     - name: 解压并执行部署脚本
       uses: appleboy/ssh-action@v1.0.3
