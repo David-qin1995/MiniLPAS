@@ -57,7 +57,7 @@ jobs:
         # 创建 gradlew 脚本（如果不存在）
         if [ ! -f "./gradlew" ]; then
           echo "创建 gradlew 脚本..."
-防守 cat > gradlew << 'GRADLEW_EOF'
+          cat > gradlew << 'GRADLEW_EOF'
         #!/bin/sh
         APP_HOME=`pwd`
         CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
@@ -80,7 +80,7 @@ jobs:
         # 创建 gradlew 脚本（如果不存在）
         if [ ! -f "./gradlew" ]; then
           echo "创建 gradlew 脚本..."
-防守 cat > gradlew << 'GRADLEW_EOF'
+          cat > gradlew << 'GRADLEW_EOF'
         #!/bin/sh
         APP_HOME=`pwd`
         CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
