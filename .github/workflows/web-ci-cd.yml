@@ -82,8 +82,17 @@ jobs:
           echo "be=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest" >> $GITHUB_OUTPUT
           echo "fe=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest" >> $GITHUB_OUTPUT
 
+      - name: Check deploy secrets
+        id: check
+        run: |
+          if [ -n "${{ secrets.SSH_HOST }}" ] && [ -n "${{ secrets.SSH_USER }}" ] && [ -n "${{ secrets.SSH_KEY }}" ]; then
+            echo "ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "ok=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: SSH deploy
-        if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' }}
+        if: ${{ steps.check.outputs.ok == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -117,7 +126,7 @@ jobs:
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d
       - name: Skip deploy (missing SSH secrets)
-        if: ${{ !(secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' ) }}
+        if: ${{ steps.check.outputs.ok != 'true' }}
         run: |
           echo "SSH_HOST/SSH_USER/SSH_KEY secrets not configured. Skipping deploy step."
 

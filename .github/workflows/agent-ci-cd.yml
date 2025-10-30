@@ -64,8 +64,17 @@ jobs:
         run: |
           echo "ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
+      - name: Check deploy secrets
+        id: check
+        run: |
+          if [ -n "${{ secrets.SSH_HOST }}" ] && [ -n "${{ secrets.SSH_USER }}" ] && [ -n "${{ secrets.SSH_KEY }}" ]; then
+            echo "ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "ok=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: SSH deploy
-        if: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' && secrets.MINILPA_SERVER_WS_URL != '' }}
+        if: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && steps.check.outputs.ok == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -93,12 +102,14 @@ jobs:
                 #   - "/dev/bus/usb:/dev/bus/usb"
             EOF
             # 若未配置 MINILPA_SERVER_WS_URL，则默认为 ws://127.0.0.1:8080/ws/agent
-            IMAGE='${{ steps.img.outputs.ref }}' WS_URL='${{ secrets.MINILPA_SERVER_WS_URL || 'ws://127.0.0.1:8080/ws/agent' }}' envsubst < "$DEPLOY_DIR/docker-compose.yml" > "$DEPLOY_DIR/docker-compose.rendered.yml"
+            WS_URL='${{ secrets.MINILPA_SERVER_WS_URL }}'
+            if [ -z "$WS_URL" ]; then WS_URL='ws://127.0.0.1:8080/ws/agent'; fi
+            IMAGE='${{ steps.img.outputs.ref }}' WS_URL="$WS_URL" envsubst < "$DEPLOY_DIR/docker-compose.yml" > "$DEPLOY_DIR/docker-compose.rendered.yml"
             mv "$DEPLOY_DIR/docker-compose.rendered.yml" "$DEPLOY_DIR/docker-compose.yml"
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d
       - name: Skip deploy (missing SSH/WS secrets)
-        if: ${{ !( (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_KEY != '' && secrets.MINILPA_SERVER_WS_URL != '' ) }}
+        if: ${{ !( (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && steps.check.outputs.ok == 'true' ) }}
         run: |
-          echo "SSH_HOST/SSH_USER/SSH_KEY/MINILPA_SERVER_WS_URL not configured. Skipping deploy step."
+          echo "SSH_HOST/SSH_USER/SSH_KEY not configured. Skipping deploy step."
 
