@@ -85,13 +85,15 @@ jobs:
                 restart: unless-stopped
                 environment:
                   - MINILPA_SERVER_WS_URL=${WS_URL}
-                # 如需USB读卡器直通，取消以下注释
+                # 同机直连，推荐使用 host 网络
+                network_mode: host
+                # 如需USB读卡器直通（可与 host 网络同时启用）
                 # privileged: true
                 # devices:
                 #   - "/dev/bus/usb:/dev/bus/usb"
-                # network_mode: host
             EOF
-            IMAGE='${{ steps.img.outputs.ref }}' WS_URL='${{ secrets.MINILPA_SERVER_WS_URL }}' envsubst < "$DEPLOY_DIR/docker-compose.yml" > "$DEPLOY_DIR/docker-compose.rendered.yml"
+            # 若未配置 MINILPA_SERVER_WS_URL，则默认为 ws://127.0.0.1:8080/ws/agent
+            IMAGE='${{ steps.img.outputs.ref }}' WS_URL='${{ secrets.MINILPA_SERVER_WS_URL || 'ws://127.0.0.1:8080/ws/agent' }}' envsubst < "$DEPLOY_DIR/docker-compose.yml" > "$DEPLOY_DIR/docker-compose.rendered.yml"
             mv "$DEPLOY_DIR/docker-compose.rendered.yml" "$DEPLOY_DIR/docker-compose.yml"
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" pull || true
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d

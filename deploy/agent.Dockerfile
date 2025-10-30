@@ -27,8 +27,8 @@ RUN set -eux; JAR=$(ls /tmp/libs/*.jar | head -n1); cp "$JAR" /app/agent.jar; rm
 COPY deploy/entrypoint-agent.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# 环境变量：后端 WS 地址
-ENV MINILPA_SERVER_WS_URL=ws://host.docker.internal:8080/ws/agent
+# 环境变量：后端 WS 地址（同机直连默认 127.0.0.1）
+ENV MINILPA_SERVER_WS_URL=ws://127.0.0.1:8080/ws/agent
 
 # 如需访问 USB 智能卡读卡器：运行时添加 --device=/dev/bus/usb 或 privileged: true
 ENTRYPOINT ["/entrypoint.sh"]

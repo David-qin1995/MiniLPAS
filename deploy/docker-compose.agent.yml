@@ -6,13 +6,13 @@ services:
       dockerfile: deploy/agent.Dockerfile
     container_name: minilpa-agent
     environment:
-      - MINILPA_SERVER_WS_URL=ws://host.docker.internal:8080/ws/agent
+      - MINILPA_SERVER_WS_URL=ws://127.0.0.1:8080/ws/agent
     restart: unless-stopped
+    network_mode: host
     # 如需访问 USB 智能卡读卡器，请取消以下注释，并在 Linux 主机上使用 --device
     # privileged: true
     # devices:
     #   - "/dev/bus/usb:/dev/bus/usb"
     # volumes:
     #   - "/run/pcscd:/run/pcscd"   # 如果使用主机 pcscd，可挂载其 socket
-    # network_mode: host            # 可选：简化网络，直接连接主机端口（Linux）
 
